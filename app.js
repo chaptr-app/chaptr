@@ -1,6 +1,8 @@
 /* chaptr — shared client logic for the V1 prototype.
    Vanilla JS, zero dependencies. State persisted in localStorage. */
 
+(function () {
+
 // ---------- storage ----------
 const Store = {
   get(key, fallback) {
@@ -241,3 +243,6 @@ window.Chaptr = {
   getCurrentBookId, setCurrentBookId,
   fmtTime, fmtDay,
 };
+
+})();
+
