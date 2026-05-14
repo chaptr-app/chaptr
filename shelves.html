@@ -12,14 +12,61 @@
 <style>
   .shelves-head { margin-top: 32px; display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
 
-  .tabs { display: flex; gap: 6px; margin-top: 24px; border-bottom: 1px solid var(--border); }
+  .tabs {
+    display: flex; gap: 6px; margin-top: 24px; border-bottom: 1px solid var(--border);
+    overflow-x: auto; scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tabs::-webkit-scrollbar { height: 4px; }
   .tab {
     padding: 12px 18px; background: transparent; border: 0;
     color: var(--ink-3); font-weight: 500; font-size: .95rem;
     cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    white-space: nowrap; flex-shrink: 0;
   }
   .tab:hover { color: var(--ink); }
   .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .tab .ct { color: var(--ink-3); font-size: .8rem; margin-left: 4px; }
+  .tab-new { color: var(--primary); }
+  .tab-new:hover { color: var(--primary-2); }
+
+  .shelf-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 20px; gap: 12px; flex-wrap: wrap;
+  }
+  .shelf-header .name-row { display: flex; align-items: center; gap: 8px; }
+  .shelf-header h3 { margin: 0; }
+  .shelf-header .icon-btn {
+    padding: 6px 10px; font-size: .85rem; border: 1px solid var(--border);
+    border-radius: var(--r-pill); background: var(--surface); color: var(--ink-2); cursor: pointer;
+  }
+  .shelf-header .icon-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .shelf-header .icon-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+  .tag-btn { padding: 6px 10px; font-size: .78rem; border: 1px solid var(--border);
+    border-radius: var(--r-pill); background: var(--surface); color: var(--ink-2); cursor: pointer; }
+  .tag-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .tag-btn.has-tags { border-color: var(--primary); color: var(--primary); background: var(--primary-tint); }
+
+  .shelf-checks { display: flex; flex-direction: column; gap: 4px; margin: 14px 0 6px; max-height: 240px; overflow-y: auto; }
+  .shelf-check {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: var(--r-sm); cursor: pointer;
+    user-select: none;
+  }
+  .shelf-check:hover { border-color: var(--primary); }
+  .shelf-check.on { background: var(--primary-tint); border-color: var(--primary); }
+  .shelf-check input { accent-color: var(--primary); }
+  .shelf-check .name { flex: 1; }
+  .shelf-check .meta { font-size: .78rem; color: var(--ink-3); }
+  .new-shelf-row { display: flex; gap: 6px; margin-top: 8px; }
+  .new-shelf-input {
+    flex: 1; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: var(--r-sm); font: inherit; background: var(--bg); color: var(--ink);
+  }
+  .new-shelf-input:focus { outline: 0; border-color: var(--primary); background: var(--surface); }
+  .empty-tag { padding: 14px; text-align: center; color: var(--ink-3); font-size: .9rem;
+    border: 1px dashed var(--border); border-radius: var(--r-sm); }
 
   .shelf-section { margin-top: 28px; }
   .book-grid {
@@ -109,10 +156,14 @@
     <span class="pill" id="totalCount">0 books</span>
   </section>
 
-  <div class="tabs" id="tabs">
-    <button class="tab active" data-shelf="reading">Reading <span class="muted" id="cntReading">0</span></button>
-    <button class="tab" data-shelf="wantToRead">Want to read <span class="muted" id="cntWant">0</span></button>
-    <button class="tab" data-shelf="read">Read <span class="muted" id="cntRead">0</span></button>
+  <div class="tabs" id="tabs"></div>
+
+  <div class="shelf-header" id="shelfHeader">
+    <div class="name-row">
+      <h3 id="shelfName">Reading</h3>
+      <span class="muted" id="shelfDesc"></span>
+    </div>
+    <div id="shelfActions"></div>
   </div>
 
   <section class="shelf-section">
@@ -120,6 +171,40 @@
   </section>
 
 </main>
+
+<div class="dlg-back" id="tagDlg">
+  <div class="dlg-card" role="dialog" aria-modal="true">
+    <div class="eyebrow">Tag with shelves</div>
+    <h3 id="tagBookTitle" style="margin:0 0 4px;">Book</h3>
+    <div class="muted" id="tagBookAuthor" style="font-size:.9rem;"></div>
+    <div class="shelf-checks" id="shelfChecks"></div>
+    <div class="new-shelf-row">
+      <input class="new-shelf-input" id="newShelfInput" placeholder="+ Create new shelf (e.g. 'Fall 2026')">
+      <button class="btn btn-outline btn-sm" id="newShelfBtn">Add</button>
+    </div>
+    <div class="dlg-actions">
+      <div></div>
+      <div class="right">
+        <button class="btn btn-primary" id="tagDone">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dlg-back" id="editShelfDlg">
+  <div class="dlg-card" role="dialog" aria-modal="true">
+    <div class="eyebrow">Edit shelf</div>
+    <h3 style="margin:0 0 12px;" id="editShelfTitle">Shelf</h3>
+    <input class="new-shelf-input" id="editShelfName" placeholder="Shelf name">
+    <div class="dlg-actions">
+      <button class="btn btn-ghost btn-sm danger" id="deleteShelfBtn" style="color:var(--danger);">Delete shelf</button>
+      <div class="right">
+        <button class="btn btn-ghost" id="editShelfCancel">Cancel</button>
+        <button class="btn btn-primary" id="editShelfSave">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="dlg-back" id="reviewDlg">
   <div class="dlg-card" role="dialog" aria-modal="true">
@@ -152,10 +237,13 @@
   </div>
 </footer>
 
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
-          getReview, setReview, fmtDay, attachSwipe, OL } = window.Chaptr;
+          getReview, setReview, fmtDay, attachSwipe, OL,
+          listCustomShelves, getCustomShelf, createCustomShelf, renameCustomShelf,
+          deleteCustomShelf, addToCustomShelf, removeFromCustomShelf,
+          customShelvesContaining } = window.Chaptr;
 
   function starString(rating) {
     if (!rating) return '';
@@ -171,21 +259,75 @@
   document.head.insertAdjacentHTML('beforeend',
     `<style>.shelf-row .cover-md { background-size: cover !important; background-position: center !important; }</style>`);
 
+  // activeShelf is either a system key ('reading'|'wantToRead'|'read') or a custom shelf id ('s_...')
   let activeShelf = 'reading';
-  const shelfLabels = { reading: 'Reading', wantToRead: 'Want to read', read: 'Read' };
+  const SYSTEM_SHELVES = [
+    { key: 'reading',    name: 'Reading',     desc: 'In progress' },
+    { key: 'wantToRead', name: 'Want to read', desc: 'On the queue' },
+    { key: 'read',       name: 'Read',        desc: 'Finished' },
+  ];
+  const systemKeys = SYSTEM_SHELVES.map(s => s.key);
+  const shelfLabels = Object.fromEntries(SYSTEM_SHELVES.map(s => [s.key, s.name]));
 
-  function renderCounts() {
+  function isSystemShelf(key) { return systemKeys.includes(key); }
+  function getActiveShelfMeta() {
+    if (isSystemShelf(activeShelf)) return SYSTEM_SHELVES.find(s => s.key === activeShelf);
+    const cs = getCustomShelf(activeShelf);
+    return cs ? { key: activeShelf, name: cs.name, desc: 'Custom shelf', custom: true } : SYSTEM_SHELVES[0];
+  }
+  function getActiveShelfIds() {
+    if (isSystemShelf(activeShelf)) return getShelves()[activeShelf] || [];
+    const cs = getCustomShelf(activeShelf);
+    return cs ? cs.books : [];
+  }
+
+  function renderTabs() {
     const s = getShelves();
-    document.getElementById('cntReading').textContent = s.reading.length;
-    document.getElementById('cntWant').textContent = s.wantToRead.length;
-    document.getElementById('cntRead').textContent = s.read.length;
-    const total = s.reading.length + s.wantToRead.length + s.read.length;
-    document.getElementById('totalCount').textContent = `${total} book${total === 1 ? '' : 's'}`;
+    const tabs = document.getElementById('tabs');
+    const customs = listCustomShelves();
+    const totalSystem = s.reading.length + s.wantToRead.length + s.read.length;
+    const totalCustomBooks = new Set();
+    customs.forEach(c => c.books.forEach(b => totalCustomBooks.add(b)));
+    document.getElementById('totalCount').textContent =
+      `${totalSystem} book${totalSystem === 1 ? '' : 's'}${customs.length ? ` · ${customs.length} custom shelf${customs.length === 1 ? '' : 'es'}` : ''}`;
+
+    const sysHtml = SYSTEM_SHELVES.map(meta => {
+      const ct = s[meta.key].length;
+      const active = activeShelf === meta.key ? 'active' : '';
+      return `<button class="tab ${active}" data-shelf="${meta.key}">${meta.name}<span class="ct">${ct}</span></button>`;
+    }).join('');
+    const customHtml = customs.map(c => {
+      const active = activeShelf === c.id ? 'active' : '';
+      return `<button class="tab ${active}" data-shelf="${c.id}">${escapeHtml(c.name)}<span class="ct">${c.books.length}</span></button>`;
+    }).join('');
+    const newHtml = `<button class="tab tab-new" data-shelf="__new__" aria-label="New shelf">+ New shelf</button>`;
+    tabs.innerHTML = sysHtml + customHtml + newHtml;
+    tabs.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        const target = t.dataset.shelf;
+        if (target === '__new__') { promptNewShelf(); return; }
+        activeShelf = target;
+        renderAll();
+      });
+    });
+  }
+
+  function renderHeader() {
+    const meta = getActiveShelfMeta();
+    document.getElementById('shelfName').textContent = meta.name;
+    document.getElementById('shelfDesc').textContent = meta.desc;
+    const actions = document.getElementById('shelfActions');
+    if (meta.custom) {
+      actions.innerHTML = `<button class="icon-btn" id="editShelfOpen">Rename or delete</button>`;
+      document.getElementById('editShelfOpen').addEventListener('click', () => openEditShelf(activeShelf));
+    } else {
+      actions.innerHTML = '';
+    }
   }
 
   function renderShelf() {
-    const s = getShelves();
-    const ids = s[activeShelf] || [];
+    const ids = getActiveShelfIds();
+    const meta = getActiveShelfMeta();
     const el = document.getElementById('shelfList');
     if (!ids.length) {
       el.innerHTML = `<div class="empty">
@@ -195,11 +337,21 @@
     }
     el.innerHTML = ids.map((id, i) => {
       const b = findBook(id);
-      const buttons = ['reading', 'wantToRead', 'read'].map(target => {
-        const cls = target === activeShelf ? 'move-btn current' : 'move-btn';
-        const dis = target === activeShelf ? 'disabled' : '';
-        return `<button class="${cls}" data-book="${id}" data-target="${target}" ${dis}>${shelfLabels[target]}</button>`;
-      }).join('') + `<button class="review-btn" data-review="${id}">${getReview(id) ? 'Edit review' : '+ Review'}</button>`;
+      let actionButtons;
+      if (meta.custom) {
+        // custom shelf: just a "Remove from this shelf" action
+        actionButtons = `<button class="move-btn" data-remove-custom="${id}">Remove</button>`;
+      } else {
+        // system shelf: move between the 3 system shelves
+        actionButtons = ['reading', 'wantToRead', 'read'].map(target => {
+          const cls = target === activeShelf ? 'move-btn current' : 'move-btn';
+          const dis = target === activeShelf ? 'disabled' : '';
+          return `<button class="${cls}" data-book="${id}" data-target="${target}" ${dis}>${shelfLabels[target]}</button>`;
+        }).join('');
+      }
+      const tagged = customShelvesContaining(id);
+      const tagBtn = `<button class="tag-btn ${tagged.length ? 'has-tags' : ''}" data-tag="${id}">${tagged.length ? `Tags · ${tagged.length}` : '+ Tag'}</button>`;
+      const reviewBtn = `<button class="review-btn" data-review="${id}">${getReview(id) ? 'Edit review' : '+ Review'}</button>`;
 
       const rv = getReview(id);
       const reviewStrip = rv ? `<div class="review-strip">
@@ -214,7 +366,7 @@
           <div class="title">${escapeHtml(b.title)}</div>
           <div class="meta">${escapeHtml(b.author)} · ${b.genre} · ${b.pages}p</div>
         </div>
-        <div class="row-actions">${buttons}</div>
+        <div class="row-actions">${actionButtons}${tagBtn}${reviewBtn}</div>
         ${reviewStrip}
       </div>`;
     }).join('');
@@ -222,20 +374,32 @@
       const node = el.querySelector(`[data-shelf-cover="${i}"]`);
       OL.applyCover(node, findBook(id), 'M');
     });
-    // wire move buttons
-    el.querySelectorAll('.move-btn').forEach(btn => {
+    // wire system move buttons
+    el.querySelectorAll('.move-btn[data-book]').forEach(btn => {
       if (btn.classList.contains('current')) return;
       btn.addEventListener('click', () => {
         moveToShelf(btn.dataset.book, btn.dataset.target);
-        renderCounts();
-        renderShelf();
+        renderAll();
       });
+    });
+    // wire remove-from-custom buttons
+    el.querySelectorAll('[data-remove-custom]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        removeFromCustomShelf(activeShelf, btn.dataset.removeCustom);
+        renderAll();
+      });
+    });
+    // wire tag buttons
+    el.querySelectorAll('[data-tag]').forEach(btn => {
+      btn.addEventListener('click', () => openTagDlg(btn.dataset.tag));
     });
     // wire review buttons
     el.querySelectorAll('[data-review]').forEach(btn => {
       btn.addEventListener('click', () => openReviewDlg(btn.dataset.review));
     });
   }
+
+  function renderAll() { renderTabs(); renderHeader(); renderShelf(); }
 
   // ---------- review modal ----------
   const reviewDlg = document.getElementById('reviewDlg');
@@ -289,36 +453,126 @@
     renderShelf();
   });
 
-  function wireTabs() {
-    const tabs = document.querySelectorAll('#tabs .tab');
-    tabs.forEach(t => {
-      t.addEventListener('click', () => {
-        activeShelf = t.dataset.shelf;
-        tabs.forEach(x => x.classList.toggle('active', x.dataset.shelf === activeShelf));
-        renderShelf();
+  // ---------- tag dialog (add/remove book from custom shelves + create new) ----------
+  const tagDlg = document.getElementById('tagDlg');
+  let tagBookId = null;
+  function openTagDlg(bookId) {
+    tagBookId = bookId;
+    const b = findBook(bookId);
+    document.getElementById('tagBookTitle').textContent = b.title;
+    document.getElementById('tagBookAuthor').textContent = b.author;
+    document.getElementById('newShelfInput').value = '';
+    paintTagChecks();
+    tagDlg.classList.add('open');
+  }
+  function paintTagChecks() {
+    const wrap = document.getElementById('shelfChecks');
+    const shelves = listCustomShelves();
+    if (!shelves.length) {
+      wrap.innerHTML = `<div class="empty-tag">No custom shelves yet — create one below.</div>`;
+      return;
+    }
+    wrap.innerHTML = shelves.map(s => {
+      const on = s.books.includes(tagBookId);
+      return `<label class="shelf-check ${on ? 'on' : ''}" data-id="${s.id}">
+        <input type="checkbox" ${on ? 'checked' : ''}>
+        <span class="name">${escapeHtml(s.name)}</span>
+        <span class="meta">${s.books.length} book${s.books.length === 1 ? '' : 's'}</span>
+      </label>`;
+    }).join('');
+    wrap.querySelectorAll('.shelf-check').forEach(label => {
+      label.addEventListener('click', (e) => {
+        // Let the native click toggle, then sync state. Stop double-fire from the inner input.
+        if (e.target.tagName !== 'INPUT') e.preventDefault();
+        const id = label.dataset.id;
+        const input = label.querySelector('input');
+        const turningOn = !input.checked;
+        if (e.target.tagName !== 'INPUT') input.checked = turningOn;
+        if (input.checked) addToCustomShelf(id, tagBookId);
+        else removeFromCustomShelf(id, tagBookId);
+        label.classList.toggle('on', input.checked);
+        // refresh count in the meta column
+        const updated = getCustomShelf(id);
+        label.querySelector('.meta').textContent = `${updated.books.length} book${updated.books.length === 1 ? '' : 's'}`;
       });
     });
   }
-
-  // ---------- swipe between tabs (mobile) ----------
-  const SHELF_ORDER = ['reading', 'wantToRead', 'read'];
-  function switchShelf(direction) {
-    const idx = SHELF_ORDER.indexOf(activeShelf);
-    const next = idx + direction;
-    if (next < 0 || next >= SHELF_ORDER.length) return;
-    activeShelf = SHELF_ORDER[next];
-    document.querySelectorAll('#tabs .tab').forEach(t =>
-      t.classList.toggle('active', t.dataset.shelf === activeShelf));
-    renderShelf();
-  }
-  attachSwipe(document.querySelector('main'), {
-    onLeft:  () => switchShelf(+1),  // swipe left → next tab
-    onRight: () => switchShelf(-1),  // swipe right → prev tab
+  document.getElementById('newShelfBtn').addEventListener('click', () => {
+    const input = document.getElementById('newShelfInput');
+    const created = createCustomShelf(input.value);
+    if (created && tagBookId) addToCustomShelf(created.id, tagBookId);
+    input.value = '';
+    paintTagChecks();
+  });
+  document.getElementById('newShelfInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('newShelfBtn').click(); }
+  });
+  document.getElementById('tagDone').addEventListener('click', () => {
+    tagDlg.classList.remove('open');
+    tagBookId = null;
+    renderAll();
+  });
+  tagDlg.addEventListener('click', (e) => {
+    if (e.target === tagDlg) { tagDlg.classList.remove('open'); tagBookId = null; renderAll(); }
   });
 
-  renderCounts();
-  renderShelf();
-  wireTabs();
+  // ---------- new shelf prompt (from the + New tab) ----------
+  function promptNewShelf() {
+    const name = prompt('Name your new shelf (e.g. "Fall 2026" or "Therapy Books"):');
+    const created = createCustomShelf(name);
+    if (created) { activeShelf = created.id; renderAll(); }
+  }
+
+  // ---------- edit shelf dialog (rename + delete) ----------
+  const editDlg = document.getElementById('editShelfDlg');
+  let editShelfId = null;
+  function openEditShelf(id) {
+    editShelfId = id;
+    const sh = getCustomShelf(id);
+    if (!sh) return;
+    document.getElementById('editShelfTitle').textContent = sh.name;
+    document.getElementById('editShelfName').value = sh.name;
+    editDlg.classList.add('open');
+    setTimeout(() => document.getElementById('editShelfName').focus(), 50);
+  }
+  document.getElementById('editShelfCancel').addEventListener('click', () => editDlg.classList.remove('open'));
+  editDlg.addEventListener('click', (e) => { if (e.target === editDlg) editDlg.classList.remove('open'); });
+  document.getElementById('editShelfSave').addEventListener('click', () => {
+    if (!editShelfId) return;
+    const newName = document.getElementById('editShelfName').value.trim();
+    if (newName) renameCustomShelf(editShelfId, newName);
+    editDlg.classList.remove('open');
+    renderAll();
+  });
+  document.getElementById('deleteShelfBtn').addEventListener('click', () => {
+    if (!editShelfId) return;
+    const sh = getCustomShelf(editShelfId);
+    if (!confirm(`Delete "${sh?.name || 'this shelf'}"? Books on it won't be deleted — they just lose this tag.`)) return;
+    deleteCustomShelf(editShelfId);
+    activeShelf = 'reading';
+    editDlg.classList.remove('open');
+    renderAll();
+  });
+
+  // ---------- swipe between tabs (mobile) ----------
+  function shelfOrder() {
+    return [...systemKeys, ...listCustomShelves().map(c => c.id)];
+  }
+  function switchShelf(direction) {
+    const order = shelfOrder();
+    const idx = order.indexOf(activeShelf);
+    if (idx < 0) return;
+    const next = idx + direction;
+    if (next < 0 || next >= order.length) return;
+    activeShelf = order[next];
+    renderAll();
+  }
+  attachSwipe(document.querySelector('main'), {
+    onLeft:  () => switchShelf(+1),
+    onRight: () => switchShelf(-1),
+  });
+
+  renderAll();
 </script>
 </body>
 </html>

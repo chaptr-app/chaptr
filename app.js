@@ -24,6 +24,7 @@ const K = {
   wpm: 'chaptr.wpm',
   bookProgress: 'chaptr.bookProgress', // map of bookId -> current page
   reviews: 'chaptr.reviews',           // map of bookId -> { rating, text, date }
+  customShelves: 'chaptr.customShelves', // map of shelfId -> { id, name, createdAt, books[] }
 };
 
 // ---------- mock book catalog ----------
@@ -387,6 +388,50 @@ function setBookProgress(bookId, page) {
   Store.set(K.bookProgress, m);
 }
 
+// ---------- custom shelves ----------
+// Independent of the 3 system shelves. A book CAN be on multiple custom shelves at once.
+function getCustomShelves() { return Store.get(K.customShelves, {}); }
+function setCustomShelvesMap(m) { Store.set(K.customShelves, m); }
+function listCustomShelves() {
+  return Object.values(getCustomShelves()).sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+}
+function getCustomShelf(id) { return getCustomShelves()[id] || null; }
+function createCustomShelf(name) {
+  const clean = (name || '').trim();
+  if (!clean) return null;
+  const id = 's_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+  const m = getCustomShelves();
+  m[id] = { id, name: clean, createdAt: new Date().toISOString(), books: [] };
+  setCustomShelvesMap(m);
+  return m[id];
+}
+function renameCustomShelf(id, name) {
+  const m = getCustomShelves();
+  if (!m[id]) return;
+  m[id].name = (name || '').trim() || m[id].name;
+  setCustomShelvesMap(m);
+}
+function deleteCustomShelf(id) {
+  const m = getCustomShelves();
+  delete m[id];
+  setCustomShelvesMap(m);
+}
+function addToCustomShelf(shelfId, bookId) {
+  const m = getCustomShelves();
+  if (!m[shelfId] || m[shelfId].books.includes(bookId)) return;
+  m[shelfId].books.push(bookId);
+  setCustomShelvesMap(m);
+}
+function removeFromCustomShelf(shelfId, bookId) {
+  const m = getCustomShelves();
+  if (!m[shelfId]) return;
+  m[shelfId].books = m[shelfId].books.filter(b => b !== bookId);
+  setCustomShelvesMap(m);
+}
+function customShelvesContaining(bookId) {
+  return listCustomShelves().filter(s => s.books.includes(bookId));
+}
+
 // ---------- current book ----------
 function getCurrentBookId() { return Store.get(K.currentBook, 'b2'); }
 function setCurrentBookId(id) { Store.set(K.currentBook, id); }
@@ -463,6 +508,8 @@ window.Chaptr = {
   startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
   getTodayMinutes, getStreak, getLast14Days,
   getShelves, setShelves, shelfFor, moveToShelf,
+  listCustomShelves, getCustomShelf, createCustomShelf, renameCustomShelf, deleteCustomShelf,
+  addToCustomShelf, removeFromCustomShelf, customShelvesContaining,
   getCurrentBookId, setCurrentBookId,
   getBookProgress, setBookProgress,
   getReviews, getReview, setReview,

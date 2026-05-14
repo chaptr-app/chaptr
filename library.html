@@ -243,11 +243,12 @@
   </div>
 </footer>
 
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
           getReviews, FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
+          listCustomShelves,
           Store, K, OL } = window.Chaptr;
 
   function starString(rating) {
@@ -323,30 +324,39 @@
     });
   }
 
-  // ---------- shelves ----------
+  // ---------- shelves (system + custom) ----------
   function renderShelves() {
     const s = getShelves();
-    const labels = [
-      { key: 'reading',    name: 'Reading',     desc: 'In progress' },
-      { key: 'wantToRead', name: 'Want to read', desc: 'On the queue' },
-      { key: 'read',       name: 'Read',        desc: 'Finished' },
+    const sys = [
+      { key: 'reading',    name: 'Reading',     desc: 'In progress', books: s.reading },
+      { key: 'wantToRead', name: 'Want to read', desc: 'On the queue', books: s.wantToRead },
+      { key: 'read',       name: 'Read',        desc: 'Finished',     books: s.read },
     ];
+    const customs = listCustomShelves().map(c => ({
+      key: c.id, name: c.name, desc: 'Custom shelf', books: c.books,
+    }));
+    const all = [...sys, ...customs];
     const el = document.getElementById('shelfGrid');
-    el.innerHTML = labels.map((l, li) => {
-      const ids = s[l.key].slice(0, 4);
+    const cards = all.map((l, li) => {
+      const ids = l.books.slice(0, 4);
       const previews = ids.map((id, ix) => `<div class="mini" data-shelf="${li}" data-ix="${ix}"></div>`).join('');
       return `<div class="shelf-card card" onclick="location.href='shelves.html'">
         <div class="label">${l.name}</div>
-        <div class="count">${s[l.key].length}</div>
+        <div class="count">${l.books.length}</div>
         <div class="muted" style="font-size:.85rem;">${l.desc}</div>
         <div class="preview">${previews || '<span class="muted" style="font-size:.85rem;">Empty</span>'}</div>
       </div>`;
     }).join('');
-    labels.forEach((l, li) => {
-      const ids = s[l.key].slice(0, 4);
+    const newCard = `<div class="shelf-card card" style="cursor:pointer; border-style:dashed; align-items:center; justify-content:center; text-align:center;" onclick="location.href='shelves.html'">
+      <div style="font-family:var(--serif); font-size:2rem; color:var(--primary);">+</div>
+      <div class="muted" style="font-size:.85rem;">New shelf</div>
+    </div>`;
+    el.innerHTML = cards + newCard;
+    all.forEach((l, li) => {
+      const ids = l.books.slice(0, 4);
       ids.forEach((id, ix) => {
         const node = el.querySelector(`[data-shelf="${li}"][data-ix="${ix}"]`);
-        OL.applyCover(node, findBook(id), 'S');
+        if (node) OL.applyCover(node, findBook(id), 'S');
       });
     });
   }
