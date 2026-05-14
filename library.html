@@ -385,8 +385,8 @@
         renderAskResults(data.books, 'Recommended by Claude · live · based on your reader DNA');
         return;
       } catch (e) {
-        resEl.innerHTML = `<div class="pill" style="color:var(--danger);">Worker error: ${escapeHtml(e.message)} — falling back to preview mode</div>`;
-        await new Promise(r => setTimeout(r, 1800));
+        console.warn('[Chaptr] Worker call failed, using preview mode:', e);
+        // silent fallback — preview mode renders below
       }
     }
 
