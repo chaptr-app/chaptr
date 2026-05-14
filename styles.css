@@ -153,3 +153,67 @@ button { font: inherit; cursor: pointer; border: 0; background: none; color: inh
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+
+/* ---------- SAFE AREAS (iOS notch + home indicator) ---------- */
+.nav { padding-top: env(safe-area-inset-top); }
+.container { padding-left: max(24px, env(safe-area-inset-left)); padding-right: max(24px, env(safe-area-inset-right)); }
+
+/* ---------- BOTTOM TAB NAV (mobile only) ---------- */
+.bottom-nav { display: none; }
+
+@media (max-width: 720px) {
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 60;
+    background: rgba(250, 247, 242, .96);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .bottom-nav a {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 10px 4px;
+    min-height: 56px;
+    color: var(--ink-3);
+    text-decoration: none;
+    font-size: .7rem;
+    font-weight: 500;
+    letter-spacing: .02em;
+    -webkit-tap-highlight-color: transparent;
+    transition: color .15s;
+  }
+  .bottom-nav a.active { color: var(--primary); }
+  .bottom-nav a:active { background: var(--primary-tint); }
+  .bottom-nav .bn-icon { width: 24px; height: 24px; display: grid; place-items: center; }
+  .bottom-nav .bn-icon svg { width: 22px; height: 22px; }
+  .bottom-nav a.active .bn-icon svg { stroke-width: 2.4; }
+
+  /* push main content above the bottom nav */
+  main { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  .footer { margin-top: 32px; margin-bottom: calc(72px + env(safe-area-inset-bottom)); padding: 24px 0; }
+
+  /* hide top nav CTA buttons on mobile — bottom nav handles navigation */
+  .nav-cta { display: none; }
+
+  /* tighten top nav since the bottom nav owns the heavy lifting */
+  .nav-inner { padding: 10px 0; }
+
+  /* larger touch targets for buttons, chips, pills */
+  .btn { min-height: 44px; }
+  .btn-sm { min-height: 36px; }
+  .browse-chip, .ask-chip { min-height: 36px; }
+  .tab { min-height: 44px; }
+
+  /* dialogs respect safe areas */
+  .dialog-backdrop, .dlg-back { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+}

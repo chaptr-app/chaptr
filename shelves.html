@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF7F2">
 <title>Shelves · Chaptr</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -151,10 +152,10 @@
   </div>
 </footer>
 
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
-          getReview, setReview, fmtDay, OL } = window.Chaptr;
+          getReview, setReview, fmtDay, attachSwipe, OL } = window.Chaptr;
 
   function starString(rating) {
     if (!rating) return '';
@@ -298,6 +299,22 @@
       });
     });
   }
+
+  // ---------- swipe between tabs (mobile) ----------
+  const SHELF_ORDER = ['reading', 'wantToRead', 'read'];
+  function switchShelf(direction) {
+    const idx = SHELF_ORDER.indexOf(activeShelf);
+    const next = idx + direction;
+    if (next < 0 || next >= SHELF_ORDER.length) return;
+    activeShelf = SHELF_ORDER[next];
+    document.querySelectorAll('#tabs .tab').forEach(t =>
+      t.classList.toggle('active', t.dataset.shelf === activeShelf));
+    renderShelf();
+  }
+  attachSwipe(document.querySelector('main'), {
+    onLeft:  () => switchShelf(+1),  // swipe left → next tab
+    onRight: () => switchShelf(-1),  // swipe right → prev tab
+  });
 
   renderCounts();
   renderShelf();

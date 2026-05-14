@@ -406,6 +406,55 @@ function fmtDay(iso) {
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
 }
 
+// ---------- mobile: bottom tab nav (auto-mounted on every page) ----------
+function mountBottomNav() {
+  if (document.querySelector('.bottom-nav')) return;
+  const pages = [
+    { href: 'today.html',   label: 'Today',   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' },
+    { href: 'library.html', label: 'Library', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z"/><path d="M20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z"/></svg>' },
+    { href: 'shelves.html', label: 'Shelves', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><rect x="3" y="10" width="18" height="5" rx="1"/><rect x="3" y="16" width="18" height="5" rx="1"/></svg>' },
+    { href: 'profile.html', label: 'Profile', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>' },
+  ];
+  const here = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  const nav = document.createElement('nav');
+  nav.className = 'bottom-nav';
+  nav.setAttribute('aria-label', 'Primary');
+  nav.innerHTML = pages.map(p => `
+    <a href="${p.href}" class="${here === p.href ? 'active' : ''}" aria-label="${p.label}">
+      <span class="bn-icon">${p.icon}</span>
+      <span class="bn-label">${p.label}</span>
+    </a>`).join('');
+  document.body.appendChild(nav);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', mountBottomNav);
+} else {
+  mountBottomNav();
+}
+
+// ---------- swipe gesture helper ----------
+function attachSwipe(target, { onLeft, onRight, threshold = 60 }) {
+  if (!target) return;
+  let startX = 0, startY = 0, tracking = false;
+  target.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+  }, { passive: true });
+  target.addEventListener('touchend', (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    if (Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0 && onLeft) onLeft();
+      else if (dx > 0 && onRight) onRight();
+    }
+  }, { passive: true });
+}
+
 // expose
 window.Chaptr = {
   Store, K, CATALOG, COVER_GRADIENTS, hashHue, findBook,
@@ -419,6 +468,7 @@ window.Chaptr = {
   getReviews, getReview, setReview,
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
+  attachSwipe, mountBottomNav,
   OL,
 };
 
