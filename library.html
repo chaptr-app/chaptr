@@ -55,6 +55,7 @@
     transition: all .15s ease;
   }
   .browse-chip:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-tint); }
+  .browse-chip.active { border-color: var(--primary); color: #FFF; background: var(--primary); }
 
   /* shelves */
   .shelf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 14px; }
@@ -93,8 +94,8 @@
     <div class="nav-links">
       <a href="today.html">Today</a>
       <a href="library.html" class="active">Library</a>
-      <a href="#" class="muted">Shelves</a>
-      <a href="#" class="muted">Profile</a>
+      <a href="shelves.html">Shelves</a>
+      <a href="profile.html">Profile</a>
     </div>
     <div class="nav-cta">
       <a href="today.html" class="btn btn-outline btn-sm hide-sm">Back to Today</a>
@@ -152,17 +153,14 @@
       <h2>By the time you have.</h2>
     </div>
   </section>
-  <div class="chips">
-    <button class="browse-chip">⏱️ 20-min read</button>
-    <button class="browse-chip">🚇 Tonight's commute</button>
-    <button class="browse-chip">🛋️ Weekend binge</button>
-    <button class="browse-chip">📚 Deep dive</button>
-    <button class="browse-chip">😌 Cozy & quiet</button>
-    <button class="browse-chip">⚡ Fast-paced</button>
-    <button class="browse-chip">🌌 Sci-fi</button>
-    <button class="browse-chip">📖 Literary</button>
-    <button class="browse-chip">🔍 Thriller</button>
-    <button class="browse-chip">🗺️ History</button>
+  <div class="chips" id="browseChips">
+    <button class="browse-chip" data-filter="all">All</button>
+    <button class="browse-chip" data-filter="short">⏱️ Quick read (&lt;380p)</button>
+    <button class="browse-chip" data-filter="long">📚 Deep dive (&gt;500p)</button>
+    <button class="browse-chip" data-filter="thriller">🔍 Thriller</button>
+    <button class="browse-chip" data-filter="literary">📖 Literary</button>
+    <button class="browse-chip" data-filter="scifi">🌌 Sci-fi</button>
+    <button class="browse-chip" data-filter="nonfic">🗺️ Non-fiction</button>
   </div>
 
   <section class="section-head">
@@ -189,9 +187,38 @@
           getShelves, Store, K } = window.Chaptr;
 
   // ---------- For You ----------
+  // augment recs with all catalog books so filters have something to bite into
+  const ALL_RECS = (() => {
+    const seenIds = new Set(FOR_YOU.map(r => r.bookId));
+    const extras = CATALOG.filter(b => !seenIds.has(b.id)).map(b => ({
+      bookId: b.id,
+      why: `Discovered for you · ${b.genre.toLowerCase()} at ${b.pages}p`,
+    }));
+    return FOR_YOU.concat(extras);
+  })();
+  let activeFilter = 'all';
+
+  function matchesFilter(book, filter) {
+    switch (filter) {
+      case 'all':      return true;
+      case 'short':    return book.pages < 380;
+      case 'long':     return book.pages > 500;
+      case 'thriller': return book.genre === 'Thriller';
+      case 'literary': return book.genre === 'Literary';
+      case 'scifi':    return book.genre === 'Sci-fi';
+      case 'nonfic':   return book.genre === 'Non-fiction';
+      default:         return true;
+    }
+  }
+
   function renderForYou() {
     const el = document.getElementById('forYouFeed');
-    el.innerHTML = FOR_YOU.map(rec => {
+    const recs = ALL_RECS.filter(rec => matchesFilter(findBook(rec.bookId), activeFilter));
+    if (!recs.length) {
+      el.innerHTML = `<div class="muted" style="padding:20px 6px;">No books match that filter yet. Try a different chip.</div>`;
+      return;
+    }
+    el.innerHTML = recs.map(rec => {
       const b = findBook(rec.bookId);
       return `<div class="rec-card">
         <div class="cover-lg" style="background:${COVER_GRADIENTS(b.hue)}"></div>
@@ -202,6 +229,19 @@
         <div class="why"><span class="label">Why this?</span> ${rec.why}</div>
       </div>`;
     }).join('');
+  }
+
+  function wireBrowseChips() {
+    const chips = document.querySelectorAll('#browseChips .browse-chip');
+    chips.forEach(c => {
+      if (c.dataset.filter === activeFilter) c.classList.add('active');
+      c.addEventListener('click', () => {
+        activeFilter = c.dataset.filter;
+        chips.forEach(x => x.classList.toggle('active', x.dataset.filter === activeFilter));
+        renderForYou();
+        document.getElementById('forYouFeed').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
   }
 
   // ---------- shelves ----------
@@ -281,6 +321,7 @@
 
   // init
   renderForYou();
+  wireBrowseChips();
   renderShelves();
   renderDNA();
 </script>

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shelves · Chaptr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .shelves-head { margin-top: 32px; display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+
+  .tabs { display: flex; gap: 6px; margin-top: 24px; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 12px 18px; background: transparent; border: 0;
+    color: var(--ink-3); font-weight: 500; font-size: .95rem;
+    cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  .shelf-section { margin-top: 28px; }
+  .book-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px;
+  }
+  .shelf-row {
+    display: grid; grid-template-columns: 56px 1fr auto; gap: 14px; align-items: center;
+    padding: 14px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-md);
+  }
+  .shelf-row .cover-md { width: 56px; height: 80px; border-radius: 5px; box-shadow: var(--shadow-sm); }
+  .shelf-row .title { font-family: var(--serif); font-size: 1.05rem; }
+  .shelf-row .meta  { color: var(--ink-3); font-size: .85rem; margin-top: 2px; }
+  .shelf-row .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .move-btn {
+    padding: 6px 10px; font-size: .78rem; border: 1px solid var(--border);
+    border-radius: var(--r-pill); background: var(--surface); color: var(--ink-2); cursor: pointer;
+  }
+  .move-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .move-btn.current { background: var(--primary-tint); color: var(--primary); border-color: var(--primary); cursor: default; }
+
+  .empty {
+    padding: 40px 16px; text-align: center; color: var(--ink-3);
+    border: 1px dashed var(--border); border-radius: var(--r-md);
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">C</span> Chaptr
+    </a>
+    <div class="nav-links">
+      <a href="today.html">Today</a>
+      <a href="library.html">Library</a>
+      <a href="shelves.html" class="active">Shelves</a>
+      <a href="profile.html">Profile</a>
+    </div>
+    <div class="nav-cta">
+      <a href="library.html" class="btn btn-outline btn-sm hide-sm">Add books</a>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+
+  <section class="shelves-head">
+    <div>
+      <div class="eyebrow">Your shelves</div>
+      <h1 style="margin:6px 0 0;">All the books, sorted by you.</h1>
+      <p class="muted" style="margin-top:6px;">Smart shelves arrive in V3. For now: three classics.</p>
+    </div>
+    <span class="pill" id="totalCount">0 books</span>
+  </section>
+
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-shelf="reading">Reading <span class="muted" id="cntReading">0</span></button>
+    <button class="tab" data-shelf="wantToRead">Want to read <span class="muted" id="cntWant">0</span></button>
+    <button class="tab" data-shelf="read">Read <span class="muted" id="cntRead">0</span></button>
+  </div>
+
+  <section class="shelf-section">
+    <div id="shelfList"></div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="container row">
+    <span>© Chaptr — a prototype.</span>
+    <span class="muted">Time is the new star rating.</span>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+<script>
+  const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf } = window.Chaptr;
+
+  let activeShelf = 'reading';
+  const shelfLabels = { reading: 'Reading', wantToRead: 'Want to read', read: 'Read' };
+
+  function renderCounts() {
+    const s = getShelves();
+    document.getElementById('cntReading').textContent = s.reading.length;
+    document.getElementById('cntWant').textContent = s.wantToRead.length;
+    document.getElementById('cntRead').textContent = s.read.length;
+    const total = s.reading.length + s.wantToRead.length + s.read.length;
+    document.getElementById('totalCount').textContent = `${total} book${total === 1 ? '' : 's'}`;
+  }
+
+  function renderShelf() {
+    const s = getShelves();
+    const ids = s[activeShelf] || [];
+    const el = document.getElementById('shelfList');
+    if (!ids.length) {
+      el.innerHTML = `<div class="empty">
+        Nothing on this shelf yet. <a href="library.html">Browse the Library</a> to add books.
+      </div>`;
+      return;
+    }
+    el.innerHTML = ids.map(id => {
+      const b = findBook(id);
+      const buttons = ['reading', 'wantToRead', 'read'].map(target => {
+        const cls = target === activeShelf ? 'move-btn current' : 'move-btn';
+        const dis = target === activeShelf ? 'disabled' : '';
+        return `<button class="${cls}" data-book="${id}" data-target="${target}" ${dis}>${shelfLabels[target]}</button>`;
+      }).join('');
+      return `<div class="shelf-row">
+        <div class="cover-md" style="background:${COVER_GRADIENTS(b.hue)}"></div>
+        <div>
+          <div class="title">${b.title}</div>
+          <div class="meta">${b.author} · ${b.genre} · ${b.pages}p</div>
+        </div>
+        <div class="row-actions">${buttons}</div>
+      </div>`;
+    }).join('');
+    // wire move buttons
+    el.querySelectorAll('.move-btn').forEach(btn => {
+      if (btn.classList.contains('current')) return;
+      btn.addEventListener('click', () => {
+        moveToShelf(btn.dataset.book, btn.dataset.target);
+        renderCounts();
+        renderShelf();
+      });
+    });
+  }
+
+  function wireTabs() {
+    const tabs = document.querySelectorAll('#tabs .tab');
+    tabs.forEach(t => {
+      t.addEventListener('click', () => {
+        activeShelf = t.dataset.shelf;
+        tabs.forEach(x => x.classList.toggle('active', x.dataset.shelf === activeShelf));
+        renderShelf();
+      });
+    });
+  }
+
+  renderCounts();
+  renderShelf();
+  wireTabs();
+</script>
+</body>
+</html>

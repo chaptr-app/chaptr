@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Profile · Chaptr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .profile-head { display: grid; grid-template-columns: 96px 1fr auto; gap: 20px; align-items: center; margin-top: 32px; }
+  @media (max-width: 720px) { .profile-head { grid-template-columns: 64px 1fr; } .profile-head .actions { grid-column: 1 / -1; } }
+  .avatar {
+    width: 96px; height: 96px; border-radius: 999px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    color: #FFF; font-family: var(--serif); font-size: 2.4rem;
+    display: grid; place-items: center;
+  }
+  @media (max-width: 720px) { .avatar { width: 64px; height: 64px; font-size: 1.6rem; } }
+  .profile-name h1 { margin: 0 0 4px; }
+  .profile-name .muted { font-size: .9rem; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 28px; }
+  @media (max-width: 720px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+  .stat-tile { padding: 18px; text-align: left; }
+  .stat-tile .label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+  .stat-tile .value { font-family: var(--serif); font-size: 2rem; line-height: 1; margin-top: 6px; color: var(--ink); }
+  .stat-tile .sub { font-size: .82rem; color: var(--ink-3); margin-top: 4px; }
+
+  .section { margin-top: 36px; }
+  .section h2 { margin-bottom: 4px; }
+
+  .genre-bar { display: grid; grid-template-columns: 110px 1fr 60px; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: .92rem; }
+  .genre-bar:first-of-type { border-top: 0; }
+  .genre-bar .name { color: var(--ink); }
+  .genre-bar .track { height: 8px; background: var(--surface-2); border-radius: var(--r-pill); overflow: hidden; }
+  .genre-bar .fill { height: 100%; background: var(--primary); }
+  .genre-bar .num { text-align: right; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+  .mood-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .mood-cell { padding: 16px; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .mood-cell .em { font-size: 1.8rem; }
+  .mood-cell .ct { font-family: var(--serif); font-size: 1.4rem; margin-top: 6px; }
+  .mood-cell .lb { font-size: .78rem; color: var(--ink-3); }
+
+  .persona-card { background: linear-gradient(180deg, #FFF, var(--primary-tint)); }
+  .persona-card .quote { font-family: var(--serif); font-size: 1.4rem; line-height: 1.3; color: var(--ink); margin: 8px 0 12px; }
+  .persona-card .signals { font-size: .82rem; color: var(--ink-3); }
+
+  .settings-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-top: 1px solid var(--border); }
+  .settings-row:first-of-type { border-top: 0; }
+  .settings-row .label { font-weight: 500; }
+  .settings-row .desc { color: var(--ink-3); font-size: .85rem; }
+  .settings-row input[type="number"] {
+    width: 80px; padding: 8px 12px; border: 1px solid var(--border);
+    border-radius: var(--r-sm); font: inherit; text-align: right;
+  }
+  .danger { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">C</span> Chaptr
+    </a>
+    <div class="nav-links">
+      <a href="today.html">Today</a>
+      <a href="library.html">Library</a>
+      <a href="shelves.html">Shelves</a>
+      <a href="profile.html" class="active">Profile</a>
+    </div>
+    <div class="nav-cta">
+      <a href="today.html" class="btn btn-outline btn-sm hide-sm">Back to Today</a>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+
+  <section class="profile-head">
+    <div class="avatar">R</div>
+    <div class="profile-name">
+      <h1 id="readerName">Reader</h1>
+      <div class="muted" id="readerSince">Reading on Chaptr</div>
+    </div>
+    <div class="actions hide-sm">
+      <a href="library.html" class="btn btn-outline btn-sm">Browse Library</a>
+    </div>
+  </section>
+
+  <div class="stats-row">
+    <div class="card stat-tile"><div class="label">Day streak</div><div class="value" id="psStreak">0</div><div class="sub">consecutive days ≥10 min</div></div>
+    <div class="card stat-tile"><div class="label">Total minutes</div><div class="value" id="psMinutes">0</div><div class="sub">since you started</div></div>
+    <div class="card stat-tile"><div class="label">Sessions</div><div class="value" id="psSessions">0</div><div class="sub">logged so far</div></div>
+    <div class="card stat-tile"><div class="label">Avg WPM</div><div class="value" id="psWpm">—</div><div class="sub">trailing average</div></div>
+  </div>
+
+  <section class="section">
+    <div class="eyebrow">Reader Persona · this week</div>
+    <h2>Your reading DNA.</h2>
+    <div class="card persona-card" style="margin-top:14px;">
+      <div class="eyebrow">Claude's read of you</div>
+      <p class="quote" id="personaText">Tap "Start session" on Today and log a few reads. Once there's data, this card describes you as a reader: pace, preferred genres, peak hours, and what books are most likely to land for you.</p>
+      <div class="signals" id="personaSignals">Based on: WPM by genre · session-time distribution · mood tags</div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="eyebrow">Pace by genre</div>
+    <h2>Where you fly, where you linger.</h2>
+    <div class="card" style="margin-top:14px;">
+      <div id="genreBars"></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="eyebrow">Mood log</div>
+    <h2>How recent sessions felt.</h2>
+    <div class="card" style="margin-top:14px;">
+      <div class="mood-grid">
+        <div class="mood-cell"><div class="em">😌</div><div class="ct" id="moodPeaceful">0</div><div class="lb">peaceful</div></div>
+        <div class="mood-cell"><div class="em">⚡</div><div class="ct" id="moodEnergized">0</div><div class="lb">energized</div></div>
+        <div class="mood-cell"><div class="em">😴</div><div class="ct" id="moodSleepy">0</div><div class="lb">sleepy</div></div>
+        <div class="mood-cell"><div class="em">🤯</div><div class="ct" id="moodWow">0</div><div class="lb">mind-blown</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="eyebrow">Settings</div>
+    <h2>Tune the habit loop.</h2>
+    <div class="card" style="margin-top:14px;">
+      <div class="settings-row">
+        <div>
+          <div class="label">Daily reading goal</div>
+          <div class="desc">Minutes per day. Drives the ring on Today.</div>
+        </div>
+        <input type="number" id="goalInput" min="5" max="240" step="5" value="20">
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="label">Wipe local data</div>
+          <div class="desc danger">Clears sessions, shelves, streak. This cannot be undone.</div>
+        </div>
+        <button class="btn btn-outline btn-sm" id="wipeBtn">Wipe</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="container row">
+    <span>© Chaptr — a prototype.</span>
+    <span class="muted">Time is the new star rating.</span>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+<script>
+  const { CATALOG, findBook, getStreak, getLast14Days, Store, K } = window.Chaptr;
+
+  // --- top stats ---
+  function renderStats() {
+    const hist = Store.get(K.history, []);
+    document.getElementById('psStreak').textContent = getStreak(10);
+    document.getElementById('psSessions').textContent = hist.length;
+    const total = hist.reduce((a, e) => a + (e.minutes || 0), 0);
+    document.getElementById('psMinutes').textContent = total;
+    const wpms = hist.map(e => e.wpm).filter(Boolean);
+    if (wpms.length) {
+      const avg = Math.round(wpms.reduce((a, n) => a + n, 0) / wpms.length);
+      document.getElementById('psWpm').textContent = avg;
+    }
+  }
+
+  // --- persona blurb ---
+  function renderPersona() {
+    const hist = Store.get(K.history, []);
+    if (!hist.length) return;
+    const total = hist.reduce((a, e) => a + (e.minutes || 0), 0);
+    const avg = Math.round(total / hist.length) || 0;
+    const genres = {};
+    for (const e of hist) {
+      const b = findBook(e.bookId);
+      genres[b.genre] = (genres[b.genre] || 0) + (e.minutes || 0);
+    }
+    const topGenre = Object.entries(genres).sort((a,b) => b[1] - a[1])[0]?.[0] || '—';
+    const hour = new Date().getHours();
+    const peak = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : hour < 22 ? 'evening' : 'late-night';
+    document.getElementById('personaText').textContent =
+      `A ${peak} ${topGenre.toLowerCase()} reader. Sessions average ${avg} minutes — long enough for real depth, short enough to keep streaks alive.`;
+  }
+
+  // --- pace by genre ---
+  function renderGenreBars() {
+    const hist = Store.get(K.history, []);
+    const byGenre = {};
+    for (const e of hist) {
+      if (!e.wpm) continue;
+      const b = findBook(e.bookId);
+      const g = b.genre;
+      if (!byGenre[g]) byGenre[g] = { sum: 0, n: 0 };
+      byGenre[g].sum += e.wpm; byGenre[g].n += 1;
+    }
+    // seed with catalog genres so the chart looks alive even pre-data
+    const seed = { 'Literary': 240, 'Thriller': 320, 'Non-fiction': 220, 'Sci-fi': 270 };
+    const merged = {};
+    for (const g of Object.keys(seed)) {
+      merged[g] = byGenre[g] ? Math.round(byGenre[g].sum / byGenre[g].n) : seed[g];
+    }
+    const max = Math.max(...Object.values(merged));
+    const el = document.getElementById('genreBars');
+    el.innerHTML = Object.entries(merged).map(([g, wpm]) => `
+      <div class="genre-bar">
+        <div class="name">${g}</div>
+        <div class="track"><div class="fill" style="width:${(wpm/max)*100}%"></div></div>
+        <div class="num">${wpm} wpm</div>
+      </div>`).join('');
+  }
+
+  // --- mood counts ---
+  function renderMoods() {
+    const hist = Store.get(K.history, []);
+    const counts = { '😌': 0, '⚡': 0, '😴': 0, '🤯': 0 };
+    for (const e of hist) if (e.mood && counts[e.mood] !== undefined) counts[e.mood] += 1;
+    document.getElementById('moodPeaceful').textContent = counts['😌'];
+    document.getElementById('moodEnergized').textContent = counts['⚡'];
+    document.getElementById('moodSleepy').textContent = counts['😴'];
+    document.getElementById('moodWow').textContent = counts['🤯'];
+  }
+
+  // --- settings ---
+  function wireSettings() {
+    const goalInput = document.getElementById('goalInput');
+    goalInput.value = Store.get(K.dailyGoalMin, 20);
+    goalInput.addEventListener('change', () => {
+      const v = Math.max(5, Math.min(240, parseInt(goalInput.value, 10) || 20));
+      goalInput.value = v;
+      Store.set(K.dailyGoalMin, v);
+    });
+    document.getElementById('wipeBtn').addEventListener('click', () => {
+      if (!confirm('Wipe all local Chaptr data? Sessions, shelves, streak — all gone.')) return;
+      [K.session, K.history, K.shelves, K.currentBook, K.dailyGoalMin, K.wpm].forEach(k => Store.remove(k));
+      location.reload();
+    });
+  }
+
+  renderStats();
+  renderPersona();
+  renderGenreBars();
+  renderMoods();
+  wireSettings();
+</script>
+</body>
+</html>
