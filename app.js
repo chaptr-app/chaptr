@@ -347,6 +347,40 @@ function computeWeekRecap(referenceDate) {
   };
 }
 
+// ---------- year activity (for calendar heatmap) ----------
+// Returns a sequence of consecutive days starting from the Sunday at-or-before today-364
+// and ending today. Each entry: { date, dow (0=Sun..6=Sat), minutes, ms }.
+function getYearActivity() {
+  const hist = Store.get(K.history, []);
+  const byDay = {};
+  for (const e of hist) {
+    const k = e.date;
+    if (!byDay[k]) byDay[k] = { minutes: 0, ms: 0 };
+    byDay[k].minutes += e.minutes || 0;
+    byDay[k].ms += e.ms || ((e.minutes || 0) * 60000);
+  }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const start = new Date(today); start.setDate(today.getDate() - 364);
+  start.setDate(start.getDate() - start.getDay()); // snap back to Sunday
+  const days = [];
+  const cursor = new Date(start);
+  while (cursor <= today) {
+    const k = cursor.toISOString().slice(0, 10);
+    const entry = byDay[k] || { minutes: 0, ms: 0 };
+    days.push({ date: k, dow: cursor.getDay(), minutes: entry.minutes, ms: entry.ms });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+}
+
+function activityLevel(minutes) {
+  if (!minutes) return 0;
+  if (minutes < 10) return 1;
+  if (minutes < 30) return 2;
+  if (minutes < 60) return 3;
+  return 4;
+}
+
 function getLast14Days() {
   const hist = Store.get(K.history, []);
   const byDay = {};
@@ -610,6 +644,7 @@ window.Chaptr = {
   COACH_NUDGES, pickCoachNudge, FOR_YOU, askClaude,
   startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
   getTodayMinutes, getStreak, getLast14Days, computeWeekRecap,
+  getYearActivity, activityLevel,
   getShelves, setShelves, shelfFor, moveToShelf,
   listCustomShelves, getCustomShelf, createCustomShelf, renameCustomShelf, deleteCustomShelf,
   addToCustomShelf, removeFromCustomShelf, customShelvesContaining,

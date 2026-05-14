@@ -32,6 +32,28 @@
   .section { margin-top: 36px; }
   .section h2 { margin-bottom: 4px; }
 
+  .cal-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 8px 4px 12px; }
+  .cal-svg { display: block; user-select: none; }
+  .cal-cell { transition: stroke .15s; }
+  .cal-cell:hover { stroke: var(--ink); stroke-width: 1; }
+  .cal-month, .cal-day { fill: var(--ink-3); font-size: 10px; font-family: var(--sans); }
+  .cal-legend {
+    display: flex; align-items: center; gap: 8px; justify-content: flex-end;
+    margin-top: 8px; color: var(--ink-3); font-size: .78rem;
+  }
+  .cal-legend .swatches { display: flex; gap: 3px; }
+  .cal-legend .sw { width: 12px; height: 12px; border-radius: 2px; }
+  .cal-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px;
+  }
+  @media (max-width: 720px) { .cal-stats { grid-template-columns: 1fr; } }
+  .cal-stats .cs {
+    padding: 12px 14px; background: var(--surface-2); border-radius: var(--r-sm);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .cal-stats .cs .v { font-family: var(--serif); font-size: 1.4rem; color: var(--ink); }
+  .cal-stats .cs .l { font-size: .72rem; color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; }
+
   .genre-bar { display: grid; grid-template-columns: 110px 1fr 60px; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: .92rem; }
   .genre-bar:first-of-type { border-top: 0; }
   .genre-bar .name { color: var(--ink); }
@@ -110,6 +132,26 @@
   </section>
 
   <section class="section">
+    <div class="eyebrow">Reading calendar · last 12 months</div>
+    <h2>Every day you opened a book.</h2>
+    <div class="card" style="margin-top:14px;">
+      <div class="cal-wrap">
+        <svg id="calSvg" class="cal-svg" aria-label="Year reading heatmap"></svg>
+      </div>
+      <div class="cal-legend">
+        <span>Less</span>
+        <div class="swatches" id="calSwatches"></div>
+        <span>More</span>
+      </div>
+      <div class="cal-stats">
+        <div class="cs"><div class="v" id="calActiveDays">0</div><div class="l">Active days (last 12 mo)</div></div>
+        <div class="cs"><div class="v" id="calTotalHours">0h</div><div class="l">Total time read</div></div>
+        <div class="cs"><div class="v" id="calLongestRun">0</div><div class="l">Longest streak (days)</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
     <div class="eyebrow">Pace by genre</div>
     <h2>Where you fly, where you linger.</h2>
     <div class="card" style="margin-top:14px;">
@@ -170,9 +212,11 @@
   </div>
 </footer>
 
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 <script>
-  const { CATALOG, findBook, getStreak, getLast14Days, Store, K } = window.Chaptr;
+  const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel, Store, K } = window.Chaptr;
+
+  const LEVEL_COLORS = ['#F4EFE6', 'hsl(150,30%,80%)', 'hsl(150,32%,60%)', 'hsl(150,38%,45%)', '#2D4A3E'];
 
   // --- top stats ---
   function renderStats() {
@@ -244,6 +288,76 @@
     document.getElementById('moodWow').textContent = counts['🤯'];
   }
 
+  // --- reading calendar (GitHub-style heatmap) ---
+  function renderCalendar() {
+    const days = getYearActivity();
+    // Constants
+    const cell = 12, gap = 2, leftPad = 28, topPad = 18;
+    const weeks = Math.ceil(days.length / 7);
+    const width = leftPad + weeks * (cell + gap);
+    const height = topPad + 7 * (cell + gap) + 18;
+    const svg = document.getElementById('calSvg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+
+    // Build cells grouped by week. days[0] is a Sunday, so week index = floor(i/7).
+    let cellsHtml = '';
+    let monthsHtml = '';
+    let lastMonth = -1;
+    days.forEach((d, i) => {
+      const week = Math.floor(i / 7);
+      const x = leftPad + week * (cell + gap);
+      const y = topPad + d.dow * (cell + gap);
+      const level = activityLevel(d.minutes);
+      const fill = LEVEL_COLORS[level];
+      const dateLabel = new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      const tip = d.minutes > 0 ? `${dateLabel} · ${d.minutes}m` : `${dateLabel} · no reading`;
+      cellsHtml += `<rect class="cal-cell" x="${x}" y="${y}" width="${cell}" height="${cell}" rx="2" fill="${fill}"><title>${tip}</title></rect>`;
+      // Month label: place on the first Sunday of each month
+      if (d.dow === 0) {
+        const m = new Date(d.date + 'T00:00:00').getMonth();
+        if (m !== lastMonth) {
+          lastMonth = m;
+          const monthName = new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short' });
+          monthsHtml += `<text class="cal-month" x="${x}" y="${topPad - 4}">${monthName}</text>`;
+        }
+      }
+    });
+    // Day labels (Mon, Wed, Fri)
+    const dayLabels = [
+      { dow: 1, label: 'Mon' },
+      { dow: 3, label: 'Wed' },
+      { dow: 5, label: 'Fri' },
+    ];
+    const labelsHtml = dayLabels.map(d => {
+      const y = topPad + d.dow * (cell + gap) + cell - 2;
+      return `<text class="cal-day" x="0" y="${y}">${d.label}</text>`;
+    }).join('');
+
+    svg.innerHTML = monthsHtml + labelsHtml + cellsHtml;
+
+    // Legend swatches
+    document.getElementById('calSwatches').innerHTML =
+      LEVEL_COLORS.map(c => `<span class="sw" style="background:${c};"></span>`).join('');
+
+    // Stats
+    const activeDays = days.filter(d => d.minutes > 0).length;
+    const totalMs = days.reduce((a, d) => a + d.ms, 0);
+    const totalH = Math.floor(totalMs / 3600000);
+    const totalM = Math.round((totalMs % 3600000) / 60000);
+    document.getElementById('calActiveDays').textContent = activeDays;
+    document.getElementById('calTotalHours').textContent = totalH > 0 ? `${totalH}h ${totalM}m` : `${totalM}m`;
+
+    // Longest streak (>= 1 minute counts as active)
+    let longest = 0, run = 0;
+    for (const d of days) {
+      if (d.minutes > 0) { run += 1; if (run > longest) longest = run; }
+      else run = 0;
+    }
+    document.getElementById('calLongestRun').textContent = longest;
+  }
+
   // --- settings ---
   function wireSettings() {
     const goalInput = document.getElementById('goalInput');
@@ -271,6 +385,7 @@
 
   renderStats();
   renderPersona();
+  renderCalendar();
   renderGenreBars();
   renderMoods();
   wireSettings();
