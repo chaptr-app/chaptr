@@ -23,6 +23,7 @@ const K = {
   dailyGoalMin: 'chaptr.dailyGoalMin',
   wpm: 'chaptr.wpm',
   bookProgress: 'chaptr.bookProgress', // map of bookId -> current page
+  reviews: 'chaptr.reviews',           // map of bookId -> { rating, text, date }
 };
 
 // ---------- mock book catalog ----------
@@ -332,6 +333,49 @@ function moveToShelf(bookId, shelf) {
   setShelves(s);
 }
 
+// ---------- reviews ----------
+function getReviews() { return Store.get(K.reviews, {}); }
+function getReview(bookId) { return getReviews()[bookId] || null; }
+function setReview(bookId, review) {
+  const m = getReviews();
+  if (!review || (!review.rating && !review.text)) {
+    delete m[bookId];
+  } else {
+    m[bookId] = { ...review, date: new Date().toISOString() };
+  }
+  Store.set(K.reviews, m);
+}
+
+// ---------- social: mock friends + activity feed ----------
+const FRIENDS = [
+  { name: 'Sarah Chen',   initials: 'SC', hue: 280 },
+  { name: 'Marcus Lee',   initials: 'ML', hue: 200 },
+  { name: 'Priya Shah',   initials: 'PS', hue: 30  },
+  { name: 'Jordan Park',  initials: 'JP', hue: 160 },
+  { name: 'Emma Wright',  initials: 'EW', hue: 320 },
+  { name: 'Theo Alvarez', initials: 'TA', hue: 12  },
+];
+
+// Mock activity. Stable seed: hours ago, not absolute timestamps, so it always reads as "recent".
+const FRIEND_ACTIVITY = [
+  { friend: 'Sarah Chen',   verb: 'finished',  bookId: 'b3', rating: 4.5, note: 'Cried at the last chapter. Worth every page.', hoursAgo: 4  },
+  { friend: 'Marcus Lee',   verb: 'started',   bookId: 'b4',              note: 'Heard great things — finally diving in.',     hoursAgo: 7  },
+  { friend: 'Priya Shah',   verb: 'finished',  bookId: 'b6', rating: 5,   note: 'Best book I read this year. Tell everyone.',  hoursAgo: 18 },
+  { friend: 'Jordan Park',  verb: 'is reading',bookId: 'b1',              note: 'Cannot put this down. The shipwreck chapter…',hoursAgo: 22 },
+  { friend: 'Emma Wright',  verb: 'finished',  bookId: 'b2', rating: 4,   note: 'Beautiful and quietly devastating.',          hoursAgo: 40 },
+  { friend: 'Sarah Chen',   verb: 'started',   bookId: 'b8',              note: 'Need a thriller for the weekend.',            hoursAgo: 52 },
+  { friend: 'Theo Alvarez', verb: 'finished',  bookId: 'b5', rating: 4.5, note: 'A door-stopper but the payoff is enormous.',  hoursAgo: 68 },
+  { friend: 'Marcus Lee',   verb: 'finished',  bookId: 'b1', rating: 5,   note: 'Reads like a novel — Grann is a master.',     hoursAgo: 90 },
+];
+
+function friendByName(name) { return FRIENDS.find(f => f.name === name); }
+function relativeTime(hoursAgo) {
+  if (hoursAgo < 1) return 'just now';
+  if (hoursAgo < 24) return `${Math.round(hoursAgo)}h ago`;
+  const d = Math.round(hoursAgo / 24);
+  return d === 1 ? 'yesterday' : `${d}d ago`;
+}
+
 // ---------- per-book page progress ----------
 function getBookProgress(bookId) {
   const m = Store.get(K.bookProgress, {});
@@ -372,6 +416,8 @@ window.Chaptr = {
   getShelves, setShelves, shelfFor, moveToShelf,
   getCurrentBookId, setCurrentBookId,
   getBookProgress, setBookProgress,
+  getReviews, getReview, setReview,
+  FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
   OL,
 };

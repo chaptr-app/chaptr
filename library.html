@@ -95,6 +95,28 @@
   .rec-card .cover-lg, .shelf-card .mini, .cover-sm, .cover, .cover-tiny {
     background-size: cover !important; background-position: center !important;
   }
+
+  /* friend feed */
+  .feed { display: grid; gap: 12px; margin-top: 14px; }
+  .feed-item {
+    display: grid; grid-template-columns: 40px 48px 1fr auto; gap: 14px; align-items: start;
+    padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+  }
+  @media (max-width: 560px) { .feed-item { grid-template-columns: 36px 44px 1fr; row-gap: 6px; }
+    .feed-item .when { grid-column: 1 / -1; padding-left: 94px; } }
+  .avatar-sm {
+    width: 40px; height: 40px; border-radius: 999px;
+    display: grid; place-items: center; color: #FFF; font-family: var(--serif);
+    font-size: .95rem; font-weight: 600; letter-spacing: .02em;
+  }
+  .feed-item .feed-cover { width: 48px; height: 70px; border-radius: 4px; box-shadow: var(--shadow-sm); }
+  .feed-item .who { font-weight: 600; color: var(--ink); }
+  .feed-item .verb { color: var(--ink-3); }
+  .feed-item .what { font-family: var(--serif); color: var(--ink); margin-left: 2px; }
+  .feed-item .stars { color: var(--accent); font-size: .92rem; margin-left: 6px; }
+  .feed-item .note { color: var(--ink-2); font-style: italic; font-size: .88rem; margin-top: 4px; }
+  .feed-item .when { color: var(--ink-3); font-size: .78rem; white-space: nowrap; }
+  .feed-item.you { background: linear-gradient(180deg, var(--primary-tint), var(--surface)); border-color: #DCE5DE; }
 </style>
 </head>
 <body>
@@ -170,6 +192,15 @@
 
   <section class="section-head">
     <div>
+      <div class="eyebrow">Friends</div>
+      <h2>What your circle is reading.</h2>
+    </div>
+    <span class="pill">Live · last few days</span>
+  </section>
+  <div class="feed" id="friendFeed"></div>
+
+  <section class="section-head">
+    <div>
       <div class="eyebrow">For you</div>
       <h2>Picked from your pace.</h2>
     </div>
@@ -211,11 +242,19 @@
   </div>
 </footer>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
+          getReviews, FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
           Store, K, OL } = window.Chaptr;
+
+  function starString(rating) {
+    if (!rating) return '';
+    const full = Math.floor(rating);
+    const half = (rating - full) >= 0.5;
+    return '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(5 - full - (half ? 1 : 0));
+  }
 
   // Worker URL stored in localStorage so you can set it from Profile without editing code.
   // Format: https://chaptr-ask.<your-subdomain>.workers.dev
@@ -489,7 +528,43 @@
     if (e.key === 'Enter') runSearch(e.target.value);
   });
 
+  // ---------- friend feed ----------
+  function renderFeed() {
+    const el = document.getElementById('friendFeed');
+    // Start with mock friend activity, then mix in your own reviews at the top
+    const myReviews = Object.entries(getReviews())
+      .filter(([, r]) => r && (r.rating || r.text))
+      .map(([bookId, r]) => {
+        const hoursAgo = Math.max(0, (Date.now() - new Date(r.date).getTime()) / 3600000);
+        return { friend: 'You', verb: 'reviewed', bookId, rating: r.rating, note: r.text, hoursAgo, isYou: true };
+      });
+    const items = [...myReviews, ...FRIEND_ACTIVITY].sort((a, b) => a.hoursAgo - b.hoursAgo).slice(0, 8);
+
+    el.innerHTML = items.map((it, i) => {
+      const b = findBook(it.bookId);
+      const f = it.isYou ? { name: 'You', initials: 'Y', hue: 160 } : friendByName(it.friend);
+      const avatarBg = `linear-gradient(135deg, hsl(${f.hue},45%,40%), hsl(${(f.hue+40)%360},55%,55%))`;
+      return `<div class="feed-item ${it.isYou ? 'you' : ''}">
+        <div class="avatar-sm" style="background:${avatarBg};">${f.initials}</div>
+        <div class="feed-cover" data-feed-cover="${i}"></div>
+        <div>
+          <span class="who">${f.name}</span>
+          <span class="verb">${it.verb}</span>
+          <span class="what">${b.title}</span>
+          ${it.rating ? `<span class="stars">${starString(it.rating)}</span>` : ''}
+          ${it.note ? `<div class="note">"${it.note}"</div>` : ''}
+        </div>
+        <div class="when">${relativeTime(it.hoursAgo)}</div>
+      </div>`;
+    }).join('');
+    items.forEach((it, i) => {
+      const node = el.querySelector(`[data-feed-cover="${i}"]`);
+      OL.applyCover(node, findBook(it.bookId), 'S');
+    });
+  }
+
   // init
+  renderFeed();
   renderForYou();
   wireBrowseChips();
   renderShelves();
