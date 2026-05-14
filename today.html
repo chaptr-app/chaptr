@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Today · Chaptr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .today-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; align-items: start; margin-top: 24px; }
+  @media (max-width: 880px) { .today-grid { grid-template-columns: 1fr; } }
+
+  .greeting { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-top: 32px; flex-wrap: wrap; }
+  .greeting h1 { margin-bottom: .15em; }
+  .stat-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stat {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 12px 18px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-md); min-width: 92px;
+  }
+  .stat-value { font-family: var(--serif); font-size: 1.6rem; line-height: 1; color: var(--ink); }
+  .stat-label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
+  /* timer card */
+  .timer-card { padding: 36px 28px; }
+  .timer-display {
+    font-family: var(--serif); font-weight: 500;
+    font-size: clamp(3.6rem, 9vw, 5.4rem); line-height: 1;
+    text-align: center; letter-spacing: -.02em;
+    color: var(--ink); font-variant-numeric: tabular-nums;
+    margin: 8px 0 6px;
+  }
+  .timer-sub { text-align: center; color: var(--ink-3); margin-bottom: 22px; }
+  .timer-controls { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+
+  /* daily goal ring */
+  .ring-wrap { position: relative; width: 110px; height: 110px; }
+  .ring-wrap svg { transform: rotate(-90deg); width: 110px; height: 110px; }
+  .ring-bg { fill: none; stroke: var(--surface-2); stroke-width: 10; }
+  .ring-fg { fill: none; stroke: var(--primary); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .6s ease; }
+  .ring-center { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .ring-pct { font-family: var(--serif); font-size: 1.4rem; line-height: 1; color: var(--ink); }
+  .ring-cap { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
+  /* current book */
+  .book-card { display: flex; gap: 16px; align-items: flex-start; }
+  .cover { width: 76px; height: 110px; border-radius: 6px; box-shadow: var(--shadow-md); flex-shrink: 0; position: relative; overflow: hidden; }
+  .cover::after { content:''; position:absolute; inset:0; background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(0,0,0,.18)); }
+  .book-meta .title { font-family: var(--serif); font-size: 1.1rem; line-height: 1.2; margin: 0 0 4px; }
+  .book-meta .author { color: var(--ink-3); font-size: .9rem; margin-bottom: 10px; }
+  .progress { height: 6px; background: var(--surface-2); border-radius: var(--r-pill); overflow: hidden; }
+  .progress > span { display: block; height: 100%; background: var(--primary); }
+
+  /* coach card */
+  .coach { background: linear-gradient(180deg, #FFF, var(--primary-tint)); border-color: #DCE5DE; position: relative; }
+  .coach .eyebrow { display: flex; align-items: center; gap: 8px; }
+  .coach-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 4px var(--primary-tint); }
+  .coach p { font-family: var(--serif); font-size: 1.05rem; color: var(--ink); margin: 8px 0 14px; line-height: 1.35; }
+  .coach .signals { font-size: .78rem; color: var(--ink-3); }
+  .coach .dismiss { position: absolute; top: 14px; right: 14px; padding: 4px 8px; border-radius: var(--r-pill); color: var(--ink-3); }
+  .coach .dismiss:hover { background: rgba(0,0,0,.04); color: var(--ink); }
+
+  /* history */
+  .history { margin-top: 28px; }
+  .sparkline { width: 100%; height: 90px; }
+  .spark-bar { fill: var(--primary); opacity: .85; }
+  .spark-bar.today { fill: var(--accent); }
+  .spark-axis { fill: var(--ink-3); font-size: 10px; font-family: var(--sans); }
+  .recent-rows { margin-top: 12px; }
+  .recent-row { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 14px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: .9rem; }
+  .recent-row:first-child { border-top: 0; }
+  .recent-row .col-title { font-family: var(--serif); color: var(--ink); }
+  .recent-row .muted { color: var(--ink-3); }
+
+  /* book picker */
+  .book-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+  .book-pick {
+    text-align: left; padding: 14px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-md); cursor: pointer; transition: border-color .15s, transform .15s;
+    display: flex; gap: 12px; align-items: center;
+  }
+  .book-pick:hover { border-color: var(--ink-3); }
+  .book-pick.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-tint); }
+  .book-pick .cover-sm { width: 36px; height: 52px; border-radius: 4px; flex-shrink: 0; }
+  .book-pick .t { font-family: var(--serif); font-size: .95rem; line-height: 1.15; }
+  .book-pick .a { font-size: .78rem; color: var(--ink-3); margin-top: 2px; }
+
+  /* stop dialog */
+  .dialog-backdrop { position: fixed; inset: 0; background: rgba(20,20,30,.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+  .dialog-backdrop.open { display: flex; }
+  .dialog { background: var(--surface); border-radius: var(--r-lg); padding: 28px; max-width: 460px; width: 100%; box-shadow: var(--shadow-lg); }
+  .field { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
+  .field label { font-size: .8rem; color: var(--ink-3); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .field input { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-sm); font: inherit; background: var(--bg); color: var(--ink); }
+  .field input:focus { outline: 0; border-color: var(--primary); background: var(--surface); }
+  .mood-row { display: flex; gap: 8px; }
+  .mood-btn { width: 44px; height: 44px; border-radius: var(--r-pill); border: 1px solid var(--border); background: var(--surface); font-size: 1.3rem; }
+  .mood-btn.selected { border-color: var(--primary); background: var(--primary-tint); }
+  .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">C</span> Chaptr
+    </a>
+    <div class="nav-links">
+      <a href="today.html" class="active">Today</a>
+      <a href="library.html">Library</a>
+      <a href="#" class="muted">Shelves</a>
+      <a href="#" class="muted">Profile</a>
+    </div>
+    <div class="nav-cta">
+      <a href="library.html" class="btn btn-ghost btn-sm hide-sm">Browse</a>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+
+  <section class="greeting">
+    <div>
+      <div class="eyebrow" id="dateLabel">Today</div>
+      <h1 id="greetingMsg">Good evening.</h1>
+      <p class="muted">Your reading habit, one chapter at a time.</p>
+    </div>
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-value" id="streakValue">0</div>
+        <div class="stat-label">Day streak</div>
+      </div>
+      <div class="stat">
+        <div class="ring-wrap">
+          <svg viewBox="0 0 110 110">
+            <circle class="ring-bg" cx="55" cy="55" r="46"></circle>
+            <circle class="ring-fg" cx="55" cy="55" r="46"
+                    stroke-dasharray="289.03" stroke-dashoffset="289.03" id="ringFg"></circle>
+          </svg>
+          <div class="ring-center">
+            <div class="ring-pct" id="ringMinutes">0</div>
+            <div class="ring-cap">of <span id="ringGoal">20</span> min</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="today-grid">
+    <!-- LEFT: timer + history -->
+    <div>
+      <div class="card card-lg timer-card">
+        <div class="eyebrow" style="text-align:center;">
+          <span id="sessionLabel">Ready when you are</span>
+        </div>
+        <div class="timer-display" id="timerDisplay">00:00</div>
+        <div class="timer-sub" id="timerSub">Pick a book to start a session.</div>
+        <div class="timer-controls" id="timerControls">
+          <button class="btn btn-primary btn-lg" id="btnStart">Start session</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <div class="eyebrow">Pick a book</div>
+        <h3 style="margin-top:6px;">Your reading stack</h3>
+        <div class="book-picker" id="bookPicker"></div>
+      </div>
+
+      <div class="card history" style="margin-top:18px;">
+        <div class="row between" style="align-items:center; margin-bottom:6px;">
+          <div>
+            <div class="eyebrow">History</div>
+            <h3 style="margin-top:6px; margin-bottom:0;">Last 14 days</h3>
+          </div>
+          <span class="pill" id="totalThisWeek">0 min this week</span>
+        </div>
+        <svg class="sparkline" id="sparkline" viewBox="0 0 280 90" preserveAspectRatio="none"></svg>
+        <div class="recent-rows" id="recentRows"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: current book + coach -->
+    <div>
+      <div class="card" id="currentBookCard">
+        <div class="eyebrow">Currently reading</div>
+        <div class="book-card" style="margin-top:10px;">
+          <div class="cover" id="ccCover"></div>
+          <div class="book-meta">
+            <div class="title" id="ccTitle"></div>
+            <div class="author" id="ccAuthor"></div>
+            <div class="progress"><span id="ccProgress" style="width:38%;"></span></div>
+            <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:.78rem; color:var(--ink-3);">
+              <span><span id="ccPct">38</span>% · p.<span id="ccPage">120</span></span>
+              <span id="ccTimeLeft">~3h 20m left</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card coach" style="margin-top:18px;">
+        <button class="dismiss" id="coachDismiss" aria-label="Dismiss">✕</button>
+        <div class="eyebrow"><span class="coach-dot"></span> Reading Coach</div>
+        <p id="coachText"></p>
+        <div class="signals">Based on: <span id="coachSignals"></span></div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <div class="eyebrow">Mood last 7 sessions</div>
+        <div style="font-size:1.6rem; letter-spacing:6px; margin-top:8px;" id="moodRow">😌 ⚡ 😌 🤯 ⚡ 😌 😴</div>
+        <div class="muted" style="font-size:.85rem; margin-top:6px;">Your reader DNA this week: <em>methodical, peak hours 8–10pm</em>.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <div class="container row">
+    <span>© Chaptr — a prototype.</span>
+    <span class="muted">Time is the new star rating.</span>
+  </div>
+</footer>
+
+<!-- end-of-session dialog -->
+<div class="dialog-backdrop" id="stopDialog">
+  <div class="dialog" role="dialog" aria-modal="true">
+    <h3 style="margin-bottom:.2em;">Wrap this session</h3>
+    <p class="muted" style="margin-bottom:8px;">A quick check-in keeps your WPM accurate.</p>
+    <div class="field">
+      <label>Started at page</label>
+      <input id="startPage" type="number" min="0" value="0">
+    </div>
+    <div class="field">
+      <label>Ended at page</label>
+      <input id="endPage" type="number" min="0" value="0">
+    </div>
+    <div class="field">
+      <label>How did it feel?</label>
+      <div class="mood-row" id="moodRow2">
+        <button class="mood-btn" data-mood="😌" title="Peaceful">😌</button>
+        <button class="mood-btn" data-mood="⚡" title="Energized">⚡</button>
+        <button class="mood-btn" data-mood="😴" title="Sleepy">😴</button>
+        <button class="mood-btn" data-mood="🤯" title="Mind-blown">🤯</button>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost" id="cancelStop">Cancel</button>
+      <button class="btn btn-primary" id="confirmStop">Save session</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+  const { CATALOG, COVER_GRADIENTS, findBook, pickCoachNudge,
+          startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
+          getTodayMinutes, getStreak, getLast14Days,
+          getCurrentBookId, setCurrentBookId,
+          fmtTime, fmtDay, Store, K } = window.Chaptr;
+
+  const DAILY_GOAL_MIN = Store.get(K.dailyGoalMin, 20);
+  const RING_CIRC = 2 * Math.PI * 46;
+
+  let tickHandle = null;
+
+  // ---------- greeting + date ----------
+  function setGreeting() {
+    const h = new Date().getHours();
+    const msg = h < 5 ? 'Late-night reader.'
+              : h < 12 ? 'Good morning.'
+              : h < 17 ? 'Good afternoon.'
+              : h < 22 ? 'Good evening.'
+              : 'Late-night reader.';
+    document.getElementById('greetingMsg').textContent = msg;
+    document.getElementById('dateLabel').textContent =
+      new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  }
+
+  // ---------- streak + daily ring ----------
+  function refreshStats() {
+    const streak = getStreak(10);
+    document.getElementById('streakValue').textContent = streak;
+    const mins = getTodayMinutes();
+    document.getElementById('ringMinutes').textContent = mins;
+    document.getElementById('ringGoal').textContent = DAILY_GOAL_MIN;
+    const pct = Math.min(1, mins / DAILY_GOAL_MIN);
+    document.getElementById('ringFg').setAttribute('stroke-dashoffset', RING_CIRC * (1 - pct));
+    const week = getLast14Days().slice(-7).reduce((a, d) => a + d.minutes, 0);
+    document.getElementById('totalThisWeek').textContent = `${week} min this week`;
+  }
+
+  // ---------- current book ----------
+  function refreshCurrentBook() {
+    const id = getCurrentBookId();
+    const b = findBook(id);
+    document.getElementById('ccCover').style.background = COVER_GRADIENTS(b.hue);
+    document.getElementById('ccTitle').textContent = b.title;
+    document.getElementById('ccAuthor').textContent = b.author;
+    const pct = Math.floor(((b.id.charCodeAt(1) || 1) * 13) % 60) + 20;
+    document.getElementById('ccProgress').style.width = pct + '%';
+    document.getElementById('ccPct').textContent = pct;
+    document.getElementById('ccPage').textContent = Math.floor(b.pages * pct / 100);
+    const remainingPages = b.pages - Math.floor(b.pages * pct / 100);
+    const wpm = Store.get(K.wpm, 250);
+    const minsLeft = Math.round((remainingPages * 275) / wpm);
+    const h = Math.floor(minsLeft / 60); const m = minsLeft % 60;
+    document.getElementById('ccTimeLeft').textContent = `~${h ? h + 'h ' : ''}${m}m left · your pace`;
+  }
+
+  // ---------- book picker ----------
+  function renderBookPicker() {
+    const el = document.getElementById('bookPicker');
+    const currentId = getCurrentBookId();
+    el.innerHTML = '';
+    for (const b of CATALOG.slice(0, 6)) {
+      const btn = document.createElement('button');
+      btn.className = 'book-pick' + (b.id === currentId ? ' selected' : '');
+      btn.innerHTML = `
+        <div class="cover-sm" style="background:${COVER_GRADIENTS(b.hue)}"></div>
+        <div><div class="t">${b.title}</div><div class="a">${b.author} · ${b.genre}</div></div>`;
+      btn.addEventListener('click', () => {
+        setCurrentBookId(b.id);
+        renderBookPicker();
+        refreshCurrentBook();
+      });
+      el.appendChild(btn);
+    }
+  }
+
+  // ---------- coach card ----------
+  function renderCoach() {
+    const dismissed = Store.get('chaptr.coachDismissedDay', null);
+    const today = new Date().toISOString().slice(0,10);
+    const wrap = document.querySelector('.coach');
+    if (dismissed === today) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    const n = pickCoachNudge();
+    document.getElementById('coachText').textContent = n.text;
+    document.getElementById('coachSignals').textContent = n.signals;
+  }
+  document.getElementById('coachDismiss').addEventListener('click', () => {
+    Store.set('chaptr.coachDismissedDay', new Date().toISOString().slice(0,10));
+    document.querySelector('.coach').style.display = 'none';
+  });
+
+  // ---------- timer ----------
+  function renderTimerState() {
+    const s = getSession();
+    const ctrls = document.getElementById('timerControls');
+    const sub = document.getElementById('timerSub');
+    const label = document.getElementById('sessionLabel');
+    if (!s) {
+      document.getElementById('timerDisplay').textContent = '00:00';
+      sub.textContent = 'Pick a book to start a session.';
+      label.textContent = 'Ready when you are';
+      ctrls.innerHTML = `<button class="btn btn-primary btn-lg" id="btnStart">Start session</button>`;
+      document.getElementById('btnStart').addEventListener('click', onStart);
+    } else {
+      const b = findBook(s.bookId);
+      sub.textContent = `Reading · ${b.title}`;
+      label.textContent = s.paused ? 'Paused' : 'In session';
+      ctrls.innerHTML = s.paused
+        ? `<button class="btn btn-primary btn-lg" id="btnResume">Resume</button>
+           <button class="btn btn-outline btn-lg" id="btnStop">Stop & log</button>`
+        : `<button class="btn btn-outline btn-lg" id="btnPause">Pause</button>
+           <button class="btn btn-accent btn-lg" id="btnStop">Stop & log</button>`;
+      const ids = ['btnResume','btnPause','btnStop'];
+      const handlers = { btnResume: onResume, btnPause: onPause, btnStop: openStopDialog };
+      ids.forEach(i => document.getElementById(i)?.addEventListener('click', handlers[i]));
+    }
+  }
+  function tick() {
+    const s = getSession();
+    if (!s) { stopTick(); return; }
+    document.getElementById('timerDisplay').textContent = fmtTime(elapsedMs(s));
+  }
+  function startTick() { stopTick(); tickHandle = setInterval(tick, 1000); tick(); }
+  function stopTick()  { if (tickHandle) clearInterval(tickHandle); tickHandle = null; }
+
+  function onStart() {
+    const id = getCurrentBookId();
+    startSession(id);
+    renderTimerState(); startTick();
+  }
+  function onPause()  { pauseSession();  renderTimerState(); stopTick(); tick(); }
+  function onResume() { resumeSession(); renderTimerState(); startTick(); }
+
+  // stop dialog
+  const dlg = document.getElementById('stopDialog');
+  let chosenMood = null;
+  function openStopDialog() {
+    chosenMood = null;
+    document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+    const id = getCurrentBookId();
+    const b = findBook(id);
+    const guess = Math.floor(b.pages * 0.4);
+    document.getElementById('startPage').value = Math.max(0, guess - 10);
+    document.getElementById('endPage').value = guess;
+    dlg.classList.add('open');
+  }
+  document.getElementById('cancelStop').addEventListener('click', () => dlg.classList.remove('open'));
+  document.querySelectorAll('.mood-btn').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.mood-btn').forEach(x => x.classList.remove('selected'));
+    b.classList.add('selected');
+    chosenMood = b.dataset.mood;
+  }));
+  document.getElementById('confirmStop').addEventListener('click', () => {
+    const startPage = parseInt(document.getElementById('startPage').value, 10) || 0;
+    const endPage   = parseInt(document.getElementById('endPage').value, 10)   || 0;
+    stopSession({ startPage, endPage, mood: chosenMood });
+    dlg.classList.remove('open');
+    stopTick();
+    renderTimerState();
+    refreshStats();
+    renderHistory();
+  });
+
+  // ---------- history ----------
+  function renderHistory() {
+    const days = getLast14Days();
+    const max = Math.max(20, ...days.map(d => d.minutes));
+    const svg = document.getElementById('sparkline');
+    const W = 280, H = 90, gap = 2, bw = (W - gap * 13) / 14;
+    const todayKey = new Date().toISOString().slice(0,10);
+    let html = '';
+    days.forEach((d, i) => {
+      const h = Math.max(2, (d.minutes / max) * (H - 14));
+      const x = i * (bw + gap);
+      const y = H - h;
+      html += `<rect class="spark-bar ${d.date === todayKey ? 'today' : ''}" x="${x}" y="${y}" width="${bw}" height="${h}" rx="2"></rect>`;
+    });
+    // light axis
+    html += `<text class="spark-axis" x="0" y="${H-1}">${days[0].date.slice(5)}</text>`;
+    html += `<text class="spark-axis" x="${W-30}" y="${H-1}">today</text>`;
+    svg.innerHTML = html;
+
+    const hist = Store.get(K.history, []).slice(-5).reverse();
+    const rows = document.getElementById('recentRows');
+    if (!hist.length) {
+      rows.innerHTML = `<div class="muted" style="padding:10px 0;">No sessions logged yet. Start a timer above ↑</div>`;
+      return;
+    }
+    rows.innerHTML = hist.map(e => {
+      const b = findBook(e.bookId);
+      return `<div class="recent-row">
+        <span class="muted">${fmtDay(e.date)}</span>
+        <span class="col-title">${b.title}</span>
+        <span class="muted">${e.minutes}m</span>
+        <span class="muted">${e.pages ? e.pages + 'p' : ''}</span>
+        <span>${e.mood || ''}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ---------- init ----------
+  setGreeting();
+  refreshStats();
+  refreshCurrentBook();
+  renderBookPicker();
+  renderCoach();
+  renderTimerState();
+  renderHistory();
+  if (getSession() && !getSession().paused) startTick();
+</script>
+</body>
+</html>

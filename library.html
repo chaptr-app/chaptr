@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library · Chaptr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .lib-hero { margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: stretch; }
+  @media (max-width: 880px) { .lib-hero { grid-template-columns: 1fr; } }
+
+  .ask-card { background: linear-gradient(180deg, #FFF, var(--primary-tint)); }
+  .ask-input-row { display: flex; gap: 8px; margin-top: 14px; }
+  .ask-input { flex: 1; padding: 14px 16px; border-radius: var(--r-pill); border: 1px solid var(--border); background: var(--surface); font: inherit; color: var(--ink); }
+  .ask-input:focus { outline: 0; border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-tint); }
+  .ask-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .ask-chip { font-size: .78rem; padding: 5px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-pill); color: var(--ink-2); cursor: pointer; }
+  .ask-chip:hover { border-color: var(--primary); color: var(--primary); }
+
+  .stat-card .num { font-family: var(--serif); font-size: 2.2rem; line-height: 1; color: var(--ink); }
+  .stat-card .lbl { font-size: .8rem; color: var(--ink-3); letter-spacing: .04em; }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+
+  .section-head { margin-top: 40px; display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+  .section-head h2 { margin-bottom: .15em; }
+
+  /* for you carousel */
+  .foryou {
+    display: flex; gap: 16px; overflow-x: auto; padding: 6px 2px 14px;
+    scroll-snap-type: x mandatory; scrollbar-width: thin;
+  }
+  .foryou::-webkit-scrollbar { height: 8px; }
+  .rec-card {
+    flex: 0 0 240px; scroll-snap-align: start;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+    padding: 14px; display: flex; flex-direction: column; gap: 10px;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .rec-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .rec-card .cover-lg { aspect-ratio: 2/3; border-radius: 6px; box-shadow: var(--shadow-md); }
+  .rec-card .title { font-family: var(--serif); font-size: 1rem; line-height: 1.2; }
+  .rec-card .author { font-size: .82rem; color: var(--ink-3); }
+  .rec-card .why { font-size: .82rem; color: var(--ink-2); border-top: 1px dashed var(--border); padding-top: 8px; margin-top: 4px; }
+  .rec-card .why .label { color: var(--primary); font-weight: 600; }
+
+  /* browse chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .browse-chip {
+    padding: 10px 16px; border-radius: var(--r-pill);
+    background: var(--surface); border: 1px solid var(--border);
+    cursor: pointer; font-size: .9rem; color: var(--ink-2);
+    transition: all .15s ease;
+  }
+  .browse-chip:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-tint); }
+
+  /* shelves */
+  .shelf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 14px; }
+  @media (max-width: 720px) { .shelf-grid { grid-template-columns: 1fr; } }
+  .shelf-card { padding: 22px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color .15s; }
+  .shelf-card:hover { border-color: var(--primary); }
+  .shelf-card .label { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--primary); font-weight: 600; }
+  .shelf-card .count { font-family: var(--serif); font-size: 2.2rem; line-height: 1; }
+  .shelf-card .preview { display: flex; margin-top: 10px; }
+  .shelf-card .preview .mini {
+    width: 28px; height: 40px; border-radius: 3px; box-shadow: var(--shadow-sm);
+    margin-left: -6px; border: 2px solid var(--surface);
+  }
+  .shelf-card .preview .mini:first-child { margin-left: 0; }
+
+  /* results panel */
+  .ask-results { margin-top: 16px; }
+  .ask-results .pill { margin-bottom: 10px; }
+  .results-list { display: grid; gap: 10px; }
+  .result-row {
+    display: grid; grid-template-columns: 40px 1fr auto; gap: 14px; align-items: center;
+    padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+  }
+  .result-row .cover-tiny { width: 40px; height: 58px; border-radius: 4px; }
+  .result-row .t { font-family: var(--serif); }
+  .result-row .a { font-size: .82rem; color: var(--ink-3); }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">C</span> Chaptr
+    </a>
+    <div class="nav-links">
+      <a href="today.html">Today</a>
+      <a href="library.html" class="active">Library</a>
+      <a href="#" class="muted">Shelves</a>
+      <a href="#" class="muted">Profile</a>
+    </div>
+    <div class="nav-cta">
+      <a href="today.html" class="btn btn-outline btn-sm hide-sm">Back to Today</a>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+
+  <section class="lib-hero">
+    <div class="card card-lg ask-card">
+      <div class="eyebrow">Ask Claude</div>
+      <h2 style="margin:6px 0 4px;">Find your next read.</h2>
+      <p class="muted" style="margin:0;">Tell me what you're in the mood for. I'll match against your reading pace, mood patterns, and shelf history.</p>
+      <div class="ask-input-row">
+        <input class="ask-input" id="askInput" placeholder="a quiet sci-fi novel under 300 pages…">
+        <button class="btn btn-primary" id="askBtn">Ask</button>
+      </div>
+      <div class="ask-chips">
+        <button class="ask-chip" data-q="a quick thriller for my commute">Quick thriller for commute</button>
+        <button class="ask-chip" data-q="a quiet literary novel">Quiet literary</button>
+        <button class="ask-chip" data-q="sci-fi under 400 pages">Sci-fi under 400p</button>
+        <button class="ask-chip" data-q="non-fiction history">Non-fic history</button>
+      </div>
+      <div class="ask-results" id="askResults"></div>
+    </div>
+
+    <div class="card card-lg stat-card">
+      <div class="eyebrow">Your reader DNA</div>
+      <h2 style="margin:6px 0 6px;">This week's signal.</h2>
+      <p class="muted" style="margin-bottom:8px;">Used to rank everything below.</p>
+      <div class="stat-grid">
+        <div><div class="num" id="dnaWpm">258</div><div class="lbl">avg WPM</div></div>
+        <div><div class="num" id="dnaPeak">9pm</div><div class="lbl">peak hour</div></div>
+        <div><div class="num" id="dnaGenre">Literary</div><div class="lbl">top genre</div></div>
+        <div><div class="num" id="dnaCompl">82%</div><div class="lbl">completion</div></div>
+        <div><div class="num" id="dnaSess">28m</div><div class="lbl">avg session</div></div>
+        <div><div class="num" id="dnaMood">😌</div><div class="lbl">top mood</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-head">
+    <div>
+      <div class="eyebrow">For you</div>
+      <h2>Picked from your pace.</h2>
+    </div>
+    <span class="pill pill-primary">Ranked by Claude · updated daily</span>
+  </section>
+  <div class="foryou" id="forYouFeed"></div>
+
+  <section class="section-head">
+    <div>
+      <div class="eyebrow">Browse</div>
+      <h2>By the time you have.</h2>
+    </div>
+  </section>
+  <div class="chips">
+    <button class="browse-chip">⏱️ 20-min read</button>
+    <button class="browse-chip">🚇 Tonight's commute</button>
+    <button class="browse-chip">🛋️ Weekend binge</button>
+    <button class="browse-chip">📚 Deep dive</button>
+    <button class="browse-chip">😌 Cozy & quiet</button>
+    <button class="browse-chip">⚡ Fast-paced</button>
+    <button class="browse-chip">🌌 Sci-fi</button>
+    <button class="browse-chip">📖 Literary</button>
+    <button class="browse-chip">🔍 Thriller</button>
+    <button class="browse-chip">🗺️ History</button>
+  </div>
+
+  <section class="section-head">
+    <div>
+      <div class="eyebrow">Your shelves</div>
+      <h2>Where you keep things.</h2>
+    </div>
+    <button class="btn btn-outline btn-sm">+ New shelf</button>
+  </section>
+  <div class="shelf-grid" id="shelfGrid"></div>
+
+</main>
+
+<footer class="footer">
+  <div class="container row">
+    <span>© Chaptr — a prototype.</span>
+    <span class="muted">Time is the new star rating.</span>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+<script>
+  const { CATALOG, COVER_GRADIENTS, findBook, FOR_YOU, askClaude,
+          getShelves, Store, K } = window.Chaptr;
+
+  // ---------- For You ----------
+  function renderForYou() {
+    const el = document.getElementById('forYouFeed');
+    el.innerHTML = FOR_YOU.map(rec => {
+      const b = findBook(rec.bookId);
+      return `<div class="rec-card">
+        <div class="cover-lg" style="background:${COVER_GRADIENTS(b.hue)}"></div>
+        <div>
+          <div class="title">${b.title}</div>
+          <div class="author">${b.author} · ${b.genre} · ${b.pages}p</div>
+        </div>
+        <div class="why"><span class="label">Why this?</span> ${rec.why}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ---------- shelves ----------
+  function renderShelves() {
+    const s = getShelves();
+    const labels = [
+      { key: 'reading',    name: 'Reading',     desc: 'In progress' },
+      { key: 'wantToRead', name: 'Want to read', desc: 'On the queue' },
+      { key: 'read',       name: 'Read',        desc: 'Finished' },
+    ];
+    const el = document.getElementById('shelfGrid');
+    el.innerHTML = labels.map(l => {
+      const ids = s[l.key].slice(0, 4);
+      const previews = ids.map(id => {
+        const b = findBook(id);
+        return `<div class="mini" style="background:${COVER_GRADIENTS(b.hue)}"></div>`;
+      }).join('');
+      return `<div class="shelf-card card">
+        <div class="label">${l.name}</div>
+        <div class="count">${s[l.key].length}</div>
+        <div class="muted" style="font-size:.85rem;">${l.desc}</div>
+        <div class="preview">${previews || '<span class="muted" style="font-size:.85rem;">Empty</span>'}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ---------- Ask Claude ----------
+  function runAsk(q) {
+    if (!q || !q.trim()) return;
+    const { picks, rationale, query } = askClaude(q);
+    const resEl = document.getElementById('askResults');
+    resEl.innerHTML = `
+      <div class="pill pill-primary">Based on: ${rationale} · your reader DNA</div>
+      <div class="results-list">
+        ${picks.map(b => `
+          <div class="result-row">
+            <div class="cover-tiny" style="background:${COVER_GRADIENTS(b.hue)}"></div>
+            <div>
+              <div class="t">${b.title}</div>
+              <div class="a">${b.author} · ${b.genre} · ${b.pages}p</div>
+            </div>
+            <button class="btn btn-outline btn-sm">+ Shelf</button>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  document.getElementById('askBtn').addEventListener('click', () => {
+    runAsk(document.getElementById('askInput').value);
+  });
+  document.getElementById('askInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runAsk(e.target.value);
+  });
+  document.querySelectorAll('.ask-chip').forEach(c => {
+    c.addEventListener('click', () => {
+      document.getElementById('askInput').value = c.dataset.q;
+      runAsk(c.dataset.q);
+    });
+  });
+
+  // ---------- DNA from history ----------
+  function renderDNA() {
+    const wpm = Store.get(K.wpm, 258);
+    document.getElementById('dnaWpm').textContent = wpm;
+    const hist = Store.get(K.history, []);
+    if (hist.length) {
+      const total = hist.reduce((a, e) => a + (e.minutes || 0), 0);
+      const avg = Math.round(total / hist.length);
+      document.getElementById('dnaSess').textContent = avg + 'm';
+      const moods = hist.map(e => e.mood).filter(Boolean);
+      if (moods.length) {
+        const top = moods.sort((a,b) =>
+          moods.filter(m => m===a).length - moods.filter(m => m===b).length).pop();
+        document.getElementById('dnaMood').textContent = top;
+      }
+    }
+  }
+
+  // init
+  renderForYou();
+  renderShelves();
+  renderDNA();
+</script>
+</body>
+</html>

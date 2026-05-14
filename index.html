@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chaptr · Read more, read smarter.</title>
+<meta name="description" content="An AI-first reading app — Goodreads' depth, Bookly's habit loop, Claude's intelligence.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .hero {
+    padding: 80px 0 60px; position: relative;
+    background:
+      radial-gradient(900px 380px at 75% -10%, rgba(45,74,62,.08), transparent 60%),
+      radial-gradient(700px 320px at 10% 100%, rgba(194,65,12,.07), transparent 60%);
+  }
+  .hero-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 56px; align-items: center; }
+  @media (max-width: 880px) { .hero-grid { grid-template-columns: 1fr; } }
+  .hero h1 .accent { color: var(--primary); font-style: italic; }
+  .hero .sub { font-size: 1.1rem; color: var(--ink-2); max-width: 540px; margin-bottom: 28px; }
+  .hero .cta-row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  .hero-mock {
+    background: var(--surface); border-radius: var(--r-lg); padding: 22px;
+    box-shadow: var(--shadow-lg); border: 1px solid var(--border);
+    position: relative; max-width: 380px; margin-left: auto;
+  }
+  .hero-mock h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  .hero-mock .timer { font-family: var(--serif); font-size: 3.2rem; line-height: 1; letter-spacing: -.02em; }
+  .hero-mock .meta { font-size: .82rem; color: var(--ink-3); margin: 6px 0 14px; }
+  .hero-mock .bar { height: 6px; background: var(--surface-2); border-radius: var(--r-pill); margin-bottom: 16px; overflow: hidden; }
+  .hero-mock .bar span { display: block; width: 62%; height: 100%; background: var(--primary); }
+  .hero-mock .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--primary-tint); color: var(--primary);
+    padding: 5px 10px; border-radius: var(--r-pill); font-size: .8rem; font-weight: 600;
+  }
+  .hero-mock .coach-mini {
+    margin-top: 16px; padding: 14px; background: linear-gradient(180deg, var(--bg), var(--primary-tint));
+    border-radius: var(--r-md); border: 1px solid #DCE5DE;
+    font-family: var(--serif); font-size: .95rem; line-height: 1.3;
+  }
+  .hero-mock .coach-mini .who { font-family: var(--sans); font-size: .72rem; color: var(--primary); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; display:flex; align-items:center; gap:6px; }
+  .hero-mock .coach-mini .dot { width:7px; height:7px; border-radius:999px; background: var(--primary); box-shadow: 0 0 0 4px var(--primary-tint); }
+
+  /* two-view */
+  .two-view { padding: 60px 0; }
+  .two-view-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 28px; }
+  @media (max-width: 880px) { .two-view-grid { grid-template-columns: 1fr; } }
+  .view-card { padding: 32px; border-radius: var(--r-lg); }
+  .view-card h3 { font-size: 1.6rem; margin-bottom: 4px; }
+  .view-card .lead { color: var(--ink-2); margin-bottom: 18px; }
+  .view-card ul { padding: 0; list-style: none; display: grid; gap: 10px; }
+  .view-card li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; font-size: .95rem; color: var(--ink-2); }
+  .view-card li::before { content: ''; }
+  .view-card .icon { width: 22px; height: 22px; border-radius: 6px; background: var(--primary-tint); display: grid; place-items: center; color: var(--primary); font-size: .75rem; font-weight: 700; }
+
+  /* ai demo */
+  .ai-demo { padding: 60px 0; }
+  .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; align-items: center; }
+  @media (max-width: 880px) { .demo-grid { grid-template-columns: 1fr; } }
+  .chat-mock {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    padding: 24px; box-shadow: var(--shadow-md);
+  }
+  .chat-bubble {
+    padding: 14px 16px; border-radius: 16px; margin-bottom: 12px;
+    max-width: 90%; line-height: 1.45;
+  }
+  .chat-bubble.user { background: var(--surface-2); color: var(--ink); margin-left: auto; border-bottom-right-radius: 4px; font-size: .92rem; }
+  .chat-bubble.claude { background: linear-gradient(180deg, #FFF, var(--primary-tint)); border: 1px solid #DCE5DE; border-bottom-left-radius: 4px; font-family: var(--serif); }
+  .chat-bubble.claude .small { font-family: var(--sans); display: block; margin-top: 8px; font-size: .78rem; color: var(--ink-3); }
+
+  /* features */
+  .features { padding: 60px 0; background: linear-gradient(180deg, transparent, var(--surface-2)); }
+  .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 28px; }
+  @media (max-width: 880px) { .feat-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .feat-grid { grid-template-columns: 1fr; } }
+  .feat { display: flex; gap: 14px; align-items: flex-start; }
+  .feat .icon-circle {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: var(--primary-tint); color: var(--primary);
+    display: grid; place-items: center; font-size: 1.05rem; flex-shrink: 0;
+  }
+  .feat h4 { font-family: var(--sans); font-size: 1rem; font-weight: 600; margin: 0 0 4px; }
+  .feat p { font-size: .9rem; color: var(--ink-2); margin: 0; }
+
+  /* cta */
+  .end-cta { padding: 80px 0 60px; text-align: center; }
+  .signup {
+    display: flex; gap: 8px; max-width: 460px; margin: 22px auto 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-pill);
+    padding: 6px;
+  }
+  .signup input { flex: 1; padding: 10px 16px; border: 0; background: transparent; font: inherit; color: var(--ink); }
+  .signup input:focus { outline: 0; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">C</span> Chaptr
+    </a>
+    <div class="nav-links">
+      <a href="today.html">Today</a>
+      <a href="library.html">Library</a>
+      <a href="#features">Features</a>
+    </div>
+    <div class="nav-cta">
+      <a href="today.html" class="btn btn-primary btn-sm">Try the prototype</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container hero-grid">
+    <div>
+      <span class="pill pill-primary">AI-first reading · prototype V1</span>
+      <h1 style="margin-top:16px;">Read more.<br><span class="accent">Read smarter.</span></h1>
+      <p class="sub">Chaptr turns your reading-time data into smarter recommendations. Bookly's habit loop, Goodreads' depth, Claude's intelligence — in one place.</p>
+      <div class="cta-row">
+        <a href="today.html" class="btn btn-primary btn-lg">Start a session →</a>
+        <a href="library.html" class="btn btn-outline btn-lg">Browse Library</a>
+      </div>
+    </div>
+    <div class="hero-mock">
+      <span class="chip">⏱ In session · Klara and the Sun</span>
+      <div class="timer" style="margin-top:14px;">22:14</div>
+      <div class="meta">Page 84 → ~92 · pace 264 wpm</div>
+      <div class="bar"><span></span></div>
+      <div class="row between" style="font-size:.82rem; color:var(--ink-3);">
+        <span>Day 7 streak 🔥</span><span>18 / 20 min today</span>
+      </div>
+      <div class="coach-mini">
+        <div class="who"><span class="dot"></span> Reading Coach</div>
+        You read thrillers <strong>40% faster</strong> than literary fiction — want a fast-paced read for your weekend?
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="two-view container">
+  <div style="text-align:center; max-width:640px; margin:0 auto;">
+    <div class="eyebrow">Two views, one loop</div>
+    <h2 style="margin-top:6px;">Habit on the left, discovery on the right.</h2>
+    <p class="muted">Open the app and you're already reading. Tap over when you're ready for the next one.</p>
+  </div>
+  <div class="two-view-grid">
+    <div class="card view-card">
+      <span class="pill pill-primary">Daily Habit</span>
+      <h3 style="margin-top:10px;">Today</h3>
+      <p class="lead">Your reading dashboard. Built around the timer.</p>
+      <ul>
+        <li><span class="icon">⏱</span> Real-time reading timer, WPM auto-tracked</li>
+        <li><span class="icon">🔥</span> Streaks + freeze tokens to protect off days</li>
+        <li><span class="icon">🎯</span> Daily goal ring (minutes or pages)</li>
+        <li><span class="icon">📖</span> Current book + "pick up where you left off"</li>
+        <li><span class="icon">🤖</span> Coach card — one Claude nudge per day</li>
+        <li><span class="icon">📊</span> 14-day sparkline + per-session mood log</li>
+      </ul>
+    </div>
+    <div class="card view-card">
+      <span class="pill pill-accent">Library Discovery</span>
+      <h3 style="margin-top:10px;">Library</h3>
+      <p class="lead">Find your next read using who you actually are as a reader.</p>
+      <ul>
+        <li><span class="icon">📚</span> Full book metadata, multi-edition covers</li>
+        <li><span class="icon">🗂</span> User shelves + AI-generated Smart shelves</li>
+        <li><span class="icon">⭐</span> Time-honest reviews ("avg reader finished in 6.2 hrs")</li>
+        <li><span class="icon">👥</span> Friend feed + reading buddies</li>
+        <li><span class="icon">💬</span> Ask Claude search — natural language</li>
+        <li><span class="icon">✨</span> For You: ranked by your pace, not the crowd's</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="ai-demo container">
+  <div class="demo-grid">
+    <div>
+      <div class="eyebrow">The AI edge</div>
+      <h2>Time-spent is the signal.<br>Nobody else uses it.</h2>
+      <p>Every star rating is a guess about what you wanted to like. Reading time tells the truth: where you sped up, where you stalled, what you finished. Claude reads your timer log and turns it into recommendations that fit your weekend, your mood, and your pace.</p>
+      <p class="muted" style="font-size:.9rem;">Every Claude suggestion cites the signals it used. Toggle any AI surface off any time.</p>
+    </div>
+    <div class="chat-mock">
+      <div class="chat-bubble user">I've got 90 minutes tonight — what should I read?</div>
+      <div class="chat-bubble claude">
+        I see you read thrillers <strong>40% faster</strong> than literary fiction. <em>Mexican Gothic</em> would fit your window at your pace, and you finish 82% of books at this length.
+        <span class="small">Based on: WPM by genre · session length · completion likelihood</span>
+      </div>
+      <div class="chat-bubble user">Something quieter?</div>
+      <div class="chat-bubble claude">
+        Try <em>The Heaven & Earth Grocery Store</em> — tagged "peaceful" by readers with your mood pattern this week. ~6h at your literary pace.
+        <span class="small">Based on: mood inference · pace by genre · similar readers</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <div class="container">
+    <div style="text-align:center; max-width:640px; margin:0 auto;">
+      <div class="eyebrow">What's in V1</div>
+      <h2 style="margin-top:6px;">The habit core, on day one.</h2>
+    </div>
+    <div class="feat-grid">
+      <div class="feat"><div class="icon-circle">⏱</div><div><h4>Reading timer</h4><p>One-tap start. Auto-pauses on app background.</p></div></div>
+      <div class="feat"><div class="icon-circle">📊</div><div><h4>WPM tracking</h4><p>Per-session, smoothed over your last 10 sessions per book.</p></div></div>
+      <div class="feat"><div class="icon-circle">🔥</div><div><h4>Streaks + freezes</h4><p>Duolingo-style tokens protect tough weeks.</p></div></div>
+      <div class="feat"><div class="icon-circle">🗂</div><div><h4>Shelves</h4><p>Reading, Want-to-Read, Read — plus custom + AI smart shelves.</p></div></div>
+      <div class="feat"><div class="icon-circle">⭐</div><div><h4>Social reviews</h4><p>Reviews with optional time-honest signal: "avg reader: 6.2 hrs."</p></div></div>
+      <div class="feat"><div class="icon-circle">✨</div><div><h4>AI recs</h4><p>Claude ranks against your timer data, not the crowd's stars.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="end-cta container">
+  <div class="eyebrow">Get on the list</div>
+  <h2 style="margin-top:6px;">Be a beta reader.</h2>
+  <p class="muted">We'll email you when the first build is testable.</p>
+  <form class="signup" onsubmit="event.preventDefault(); this.querySelector('button').textContent='Thanks 🙌'; this.querySelector('input').value='';">
+    <input type="email" placeholder="you@somewhere.com" required>
+    <button class="btn btn-primary" type="submit">Notify me</button>
+  </form>
+</section>
+
+<footer class="footer">
+  <div class="container row">
+    <span>© Chaptr — a prototype.</span>
+    <span class="muted">Time is the new star rating.</span>
+  </div>
+</footer>
+
+</body>
+</html>

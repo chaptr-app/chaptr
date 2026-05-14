@@ -1,0 +1,34 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Node / web
+node_modules/
+dist/
+build/
+.next/
+.cache/
+coverage/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python (in case any scripts/tools land here)
+__pycache__/
+*.pyc
+.venv/
+venv/
