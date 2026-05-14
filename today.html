@@ -286,6 +286,8 @@
           startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
           getTodayMinutes, getStreak, getLast14Days,
           getCurrentBookId, setCurrentBookId,
+          getBookProgress, setBookProgress,
+          getShelves, getCustomBooks,
           fmtTime, fmtDay, Store, K, OL } = window.Chaptr;
 
   const DAILY_GOAL_MIN = Store.get(K.dailyGoalMin, 20);
@@ -327,23 +329,45 @@
     OL.applyCover(document.getElementById('ccCover'), b, 'M');
     document.getElementById('ccTitle').textContent = b.title;
     document.getElementById('ccAuthor').textContent = b.author;
-    const pct = Math.floor(((b.id.charCodeAt(1) || 1) * 13) % 60) + 20;
+    const currentPage = getBookProgress(id);
+    const pct = currentPage > 0 ? Math.min(100, Math.round((currentPage / b.pages) * 100)) : 0;
     document.getElementById('ccProgress').style.width = pct + '%';
     document.getElementById('ccPct').textContent = pct;
-    document.getElementById('ccPage').textContent = Math.floor(b.pages * pct / 100);
-    const remainingPages = b.pages - Math.floor(b.pages * pct / 100);
+    document.getElementById('ccPage').textContent = currentPage || 0;
+    const remainingPages = Math.max(0, b.pages - currentPage);
     const wpm = Store.get(K.wpm, 250);
     const minsLeft = Math.round((remainingPages * 275) / wpm);
     const h = Math.floor(minsLeft / 60); const m = minsLeft % 60;
-    document.getElementById('ccTimeLeft').textContent = `~${h ? h + 'h ' : ''}${m}m left · your pace`;
+    const timeLeft = pct >= 100 ? 'Finished!' : minsLeft < 2 ? 'Almost done' : `~${h ? h + 'h ' : ''}${m}m left · your pace`;
+    document.getElementById('ccTimeLeft').textContent = timeLeft;
   }
 
   // ---------- book picker ----------
+  function pickerBooks() {
+    const shelves = getShelves();
+    const customMap = getCustomBooks();
+    // reading shelf first (seed + custom), then want-to-read, then remaining catalog
+    const seen = new Set();
+    const ordered = [];
+    for (const id of [...shelves.reading, ...shelves.wantToRead]) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      ordered.push(findBook(id));
+    }
+    for (const b of CATALOG) {
+      if (!seen.has(b.id)) { seen.add(b.id); ordered.push(b); }
+    }
+    for (const b of Object.values(customMap)) {
+      if (!seen.has(b.id)) { seen.add(b.id); ordered.push(b); }
+    }
+    return ordered.slice(0, 8);
+  }
+
   function renderBookPicker() {
     const el = document.getElementById('bookPicker');
     const currentId = getCurrentBookId();
     el.innerHTML = '';
-    for (const b of CATALOG.slice(0, 6)) {
+    for (const b of pickerBooks()) {
       const btn = document.createElement('button');
       btn.className = 'book-pick' + (b.id === currentId ? ' selected' : '');
       btn.innerHTML = `
@@ -439,11 +463,12 @@
     chosenMood = null;
     document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
     const id = getCurrentBookId();
-    const b = findBook(id);
-    const guess = Math.floor(b.pages * 0.4);
-    document.getElementById('startPage').value = Math.max(0, guess - 10);
-    document.getElementById('endPage').value = guess;
+    const lastPage = getBookProgress(id);
+    document.getElementById('startPage').value = lastPage;
+    document.getElementById('endPage').value = lastPage;
     dlg.classList.add('open');
+    // focus end page so user just types where they stopped
+    setTimeout(() => document.getElementById('endPage').focus(), 50);
   }
   document.getElementById('cancelStop').addEventListener('click', () => dlg.classList.remove('open'));
   document.querySelectorAll('.mood-btn').forEach(b => b.addEventListener('click', () => {

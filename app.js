@@ -22,6 +22,7 @@ const K = {
   currentBook: 'chaptr.currentBook',
   dailyGoalMin: 'chaptr.dailyGoalMin',
   wpm: 'chaptr.wpm',
+  bookProgress: 'chaptr.bookProgress', // map of bookId -> current page
 };
 
 // ---------- mock book catalog ----------
@@ -240,6 +241,7 @@ function stopSession({ endPage, startPage, mood }) {
   hist.push(entry);
   Store.set(K.history, hist);
   if (wpm) Store.set(K.wpm, wpm);
+  if (endPage > 0) setBookProgress(s.bookId, endPage);
   clearSession();
   return entry;
 }
@@ -317,6 +319,17 @@ function moveToShelf(bookId, shelf) {
   setShelves(s);
 }
 
+// ---------- per-book page progress ----------
+function getBookProgress(bookId) {
+  const m = Store.get(K.bookProgress, {});
+  return m[bookId] || 0;
+}
+function setBookProgress(bookId, page) {
+  const m = Store.get(K.bookProgress, {});
+  m[bookId] = page;
+  Store.set(K.bookProgress, m);
+}
+
 // ---------- current book ----------
 function getCurrentBookId() { return Store.get(K.currentBook, 'b2'); }
 function setCurrentBookId(id) { Store.set(K.currentBook, id); }
@@ -345,6 +358,7 @@ window.Chaptr = {
   getTodayMinutes, getStreak, getLast14Days,
   getShelves, setShelves, shelfFor, moveToShelf,
   getCurrentBookId, setCurrentBookId,
+  getBookProgress, setBookProgress,
   fmtTime, fmtDay,
   OL,
 };
