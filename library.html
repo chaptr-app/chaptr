@@ -213,9 +213,13 @@
 
 <script src="app.js?v=5"></script>
 <script>
-  const { CATALOG, COVER_GRADIENTS, findBook, FOR_YOU, askClaude,
+  const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
           Store, K, OL } = window.Chaptr;
+
+  // Worker URL stored in localStorage so you can set it from Profile without editing code.
+  // Format: https://chaptr-ask.<your-subdomain>.workers.dev
+  function getWorkerUrl() { return Store.get('chaptr.workerUrl', '') || ''; }
 
   // ---------- For You ----------
   // augment recs with all catalog books so filters have something to bite into
@@ -308,35 +312,88 @@
   }
 
   // ---------- Ask Claude ----------
-  function runAsk(q) {
-    if (!q || !q.trim()) return;
-    const { picks, rationale } = askClaude(q);
+  function buildReaderDna() {
+    const hist = Store.get(K.history, []);
+    const wpm = Store.get(K.wpm, 258);
+    const total = hist.reduce((a, e) => a + (e.minutes || 0), 0);
+    const avgSession = hist.length ? Math.round(total / hist.length) : 0;
+    const genres = {};
+    for (const e of hist) {
+      const b = findBook(e.bookId);
+      genres[b.genre] = (genres[b.genre] || 0) + (e.minutes || 0);
+    }
+    const topGenre = Object.entries(genres).sort((a, b) => b[1] - a[1])[0]?.[0] || 'unknown';
+    const moods = hist.map(e => e.mood).filter(Boolean);
+    const mood = moods.length
+      ? moods.sort((a, b) => moods.filter(m => m === a).length - moods.filter(m => m === b).length).pop()
+      : 'unknown';
+    const shelves = getShelves();
+    const shelfCount = shelves.reading.length + shelves.wantToRead.length + shelves.read.length;
+    return { wpm, avgSession, topGenre, mood, shelfCount };
+  }
+
+  function renderAskResults(books, label) {
     const resEl = document.getElementById('askResults');
     resEl.innerHTML = `
-      <div class="pill pill-primary">Based on: ${rationale} · your reader DNA</div>
+      <div class="pill pill-primary">${escapeHtml(label)}</div>
       <div class="results-list">
-        ${picks.map((b, i) => `
+        ${books.map((b, i) => `
           <div class="result-row">
             <div class="cover-tiny" data-ask-cover="${i}"></div>
             <div>
-              <div class="t">${b.title}</div>
-              <div class="a">${b.author} · ${b.genre} · ${b.pages}p</div>
+              <div class="t">${escapeHtml(b.title)}</div>
+              <div class="a">${escapeHtml(b.author)} · ${b.genre} · ${b.pages}p</div>
+              ${b.why ? `<div class="a" style="margin-top:3px;font-style:italic;">${escapeHtml(b.why)}</div>` : ''}
             </div>
-            <button class="btn btn-outline btn-sm" data-add-ask="${b.id}">+ Shelf</button>
+            <button class="btn btn-outline btn-sm" data-add-ask="${i}">+ Shelf</button>
           </div>`).join('')}
       </div>`;
-    picks.forEach((b, i) => {
+    books.forEach((b, i) => {
       const node = resEl.querySelector(`[data-ask-cover="${i}"]`);
-      OL.applyCover(node, b, 'S');
+      OL.applyCover(node, { ...b, hue: hashHue(b.title + b.author) }, 'S');
     });
     resEl.querySelectorAll('[data-add-ask]').forEach(btn => {
       btn.addEventListener('click', () => {
-        moveToShelf(btn.dataset.addAsk, 'wantToRead');
+        const idx = parseInt(btn.dataset.addAsk, 10);
+        const b = books[idx];
+        const id = 'claude_' + Date.now() + '_' + idx;
+        addCustomBook({ ...b, id, hue: hashHue(b.title + b.author) });
+        moveToShelf(id, 'wantToRead');
         btn.textContent = '✓ On shelf';
         btn.disabled = true;
         renderShelves();
       });
     });
+  }
+
+  async function runAsk(q) {
+    if (!q || !q.trim()) return;
+    const resEl = document.getElementById('askResults');
+    const workerUrl = getWorkerUrl();
+
+    if (workerUrl) {
+      resEl.innerHTML = `<div class="pill">Claude is thinking…</div>`;
+      try {
+        const dna = buildReaderDna();
+        const resp = await fetch(workerUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q, readerDna: dna }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.books) throw new Error(data.error || 'Bad response');
+        renderAskResults(data.books, 'Recommended by Claude · live · based on your reader DNA');
+        return;
+      } catch (e) {
+        resEl.innerHTML = `<div class="pill" style="color:var(--danger);">Worker error: ${escapeHtml(e.message)} — falling back to preview mode</div>`;
+        await new Promise(r => setTimeout(r, 1800));
+      }
+    }
+
+    // mock fallback
+    const { picks, rationale } = askClaude(q);
+    const mockBooks = picks.map(b => ({ ...b, why: null }));
+    renderAskResults(mockBooks, `Preview mode · Based on: ${rationale}`);
   }
 
   document.getElementById('askBtn').addEventListener('click', () => {

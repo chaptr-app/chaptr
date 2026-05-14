@@ -141,6 +141,16 @@
         <input type="number" id="goalInput" min="5" max="240" step="5" value="20">
       </div>
       <div class="settings-row">
+        <div style="flex:1; margin-right:16px;">
+          <div class="label">Claude Worker URL</div>
+          <div class="desc">Your Cloudflare Worker endpoint. Powers the real "Ask Claude" in Library.</div>
+          <input type="url" id="workerInput" placeholder="https://chaptr-ask.your-name.workers.dev"
+            style="margin-top:8px; width:100%; padding:8px 12px; border:1px solid var(--border);
+                   border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink);">
+          <div id="workerStatus" style="font-size:.8rem; margin-top:4px; color:var(--ink-3);"></div>
+        </div>
+      </div>
+      <div class="settings-row">
         <div>
           <div class="label">Wipe local data</div>
           <div class="desc danger">Clears sessions, shelves, streak. This cannot be undone.</div>
@@ -242,6 +252,15 @@
       goalInput.value = v;
       Store.set(K.dailyGoalMin, v);
     });
+    const workerInput = document.getElementById('workerInput');
+    const workerStatus = document.getElementById('workerStatus');
+    workerInput.value = Store.get('chaptr.workerUrl', '');
+    workerInput.addEventListener('change', () => {
+      const v = workerInput.value.trim();
+      Store.set('chaptr.workerUrl', v);
+      workerStatus.textContent = v ? '✓ Saved — Ask Claude in Library will use this.' : 'Cleared — Ask Claude will use preview mode.';
+    });
+
     document.getElementById('wipeBtn').addEventListener('click', () => {
       if (!confirm('Wipe all local Chaptr data? Sessions, shelves, streak — all gone.')) return;
       [K.session, K.history, K.shelves, K.currentBook, K.dailyGoalMin, K.wpm].forEach(k => Store.remove(k));

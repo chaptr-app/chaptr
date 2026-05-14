@@ -1,0 +1,7 @@
+name = "chaptr-ask"
+main = "index.js"
+compatibility_date = "2024-09-23"
+
+# After deploying, run:
+#   npx wrangler secret put ANTHROPIC_API_KEY
+# Then paste your key at the prompt.
