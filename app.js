@@ -296,6 +296,57 @@ function getStreak(minMinutes = 10) {
   return streak;
 }
 
+// ---------- weekly recap ----------
+function computeWeekRecap(referenceDate) {
+  const hist = Store.get(K.history, []);
+  const ref = referenceDate ? new Date(referenceDate) : new Date();
+  // Monday of the current week (Mon = 1, Sun = 0)
+  const day = ref.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(ref); monday.setHours(0, 0, 0, 0);
+  monday.setDate(ref.getDate() + mondayOffset);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23, 59, 59, 999);
+  const prevMonday = new Date(monday); prevMonday.setDate(monday.getDate() - 7);
+  const prevSunday = new Date(monday); prevSunday.setDate(monday.getDate() - 1); prevSunday.setHours(23, 59, 59, 999);
+
+  const within = (start, end) => (e) => {
+    const d = new Date(e.date + 'T12:00:00');
+    return d >= start && d <= end;
+  };
+  const sumMs = (arr) => arr.reduce((a, e) => a + (e.ms || (e.minutes || 0) * 60000), 0);
+  const avg = (arr) => arr.length ? arr.reduce((a, n) => a + n, 0) / arr.length : 0;
+
+  const weekHist = hist.filter(within(monday, sunday));
+  const prevHist = hist.filter(within(prevMonday, prevSunday));
+
+  const totalMs = sumMs(weekHist);
+  const prevMs = sumMs(prevHist);
+  const bookIds = Array.from(new Set(weekHist.map(e => e.bookId)));
+  let longestMs = 0, longestEntry = null;
+  for (const e of weekHist) {
+    const ms = e.ms || (e.minutes || 0) * 60000;
+    if (ms > longestMs) { longestMs = ms; longestEntry = e; }
+  }
+  const wpmThis = Math.round(avg(weekHist.map(e => e.wpm).filter(Boolean)));
+  const wpmPrev = Math.round(avg(prevHist.map(e => e.wpm).filter(Boolean)));
+  const wpmDelta = wpmPrev > 0 ? Math.round(((wpmThis - wpmPrev) / wpmPrev) * 100) : null;
+  const timeDelta = prevMs > 0 ? Math.round(((totalMs - prevMs) / prevMs) * 100) : null;
+
+  return {
+    monday, sunday,
+    totalMs,
+    totalMinutes: Math.round(totalMs / 60000),
+    sessionsCount: weekHist.length,
+    bookIds,
+    longestMs,
+    longestMinutes: Math.round(longestMs / 60000),
+    longestEntry,
+    wpmThis, wpmPrev, wpmDelta,
+    timeDelta,
+    isSunday: ref.getDay() === 0,
+  };
+}
+
 function getLast14Days() {
   const hist = Store.get(K.history, []);
   const byDay = {};
@@ -558,7 +609,7 @@ window.Chaptr = {
   getCustomBooks, addCustomBook,
   COACH_NUDGES, pickCoachNudge, FOR_YOU, askClaude,
   startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
-  getTodayMinutes, getStreak, getLast14Days,
+  getTodayMinutes, getStreak, getLast14Days, computeWeekRecap,
   getShelves, setShelves, shelfFor, moveToShelf,
   listCustomShelves, getCustomShelf, createCustomShelf, renameCustomShelf, deleteCustomShelf,
   addToCustomShelf, removeFromCustomShelf, customShelvesContaining,

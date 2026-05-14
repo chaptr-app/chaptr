@@ -88,6 +88,59 @@
   .book-pick .t { font-family: var(--serif); font-size: .95rem; line-height: 1.15; }
   .book-pick .a { font-size: .78rem; color: var(--ink-3); margin-top: 2px; }
 
+  /* ---------- weekly recap ---------- */
+  .week-card {
+    margin-top: 24px;
+    padding: 24px 28px;
+    background: linear-gradient(135deg, #FFF 0%, var(--primary-tint) 100%);
+    border: 1px solid #DCE5DE;
+  }
+  .week-card.sunday {
+    background: linear-gradient(135deg, var(--primary-tint) 0%, var(--accent-tint) 100%);
+    border-color: #F5D4B8;
+  }
+  .week-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  .week-head .eyebrow { display: flex; align-items: center; gap: 8px; }
+  .week-head .range { color: var(--ink-3); font-size: .85rem; }
+  .week-title { font-family: var(--serif); font-size: 1.5rem; line-height: 1.15; margin: 4px 0 16px; }
+  .week-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 720px) { .week-stats { grid-template-columns: repeat(2, 1fr); gap: 12px; } }
+  .week-stat { padding: 10px 0; }
+  .week-stat .num {
+    font-family: var(--serif); font-size: 2rem; line-height: 1; color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .week-stat .num.dim { color: var(--ink-3); }
+  .week-stat .lbl {
+    font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-3); margin-top: 6px;
+  }
+  .week-stat .delta {
+    font-size: .8rem; margin-top: 4px; font-weight: 600;
+  }
+  .week-stat .delta.up { color: var(--success); }
+  .week-stat .delta.down { color: var(--danger); }
+  .week-books {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--border);
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .week-books .lbl {
+    font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-3); margin-right: 4px;
+  }
+  .week-books .b-cover {
+    width: 32px; height: 46px; border-radius: 3px; box-shadow: var(--shadow-sm);
+    background-size: cover !important; background-position: center !important;
+  }
+  .week-insight {
+    margin-top: 14px; padding-top: 14px;
+    border-top: 1px dashed var(--border);
+    font-family: var(--serif); color: var(--ink); font-size: 1rem; line-height: 1.4;
+  }
+  .week-insight .sparkle { color: var(--accent); margin-right: 4px; }
+
   /* heartbeat dot — proves the timer interval is alive */
   .heartbeat {
     display: inline-block; width: 8px; height: 8px; border-radius: 999px;
@@ -168,6 +221,36 @@
       </div>
     </div>
   </section>
+
+  <div class="card week-card" id="weekCard" style="display:none;">
+    <div class="week-head">
+      <div class="eyebrow"><span id="weekEyebrow">This week</span></div>
+      <span class="range" id="weekRange"></span>
+    </div>
+    <div class="week-title" id="weekTitle">Your reading this week.</div>
+    <div class="week-stats">
+      <div class="week-stat">
+        <div class="num" id="wsTime">0m</div>
+        <div class="lbl">Total time</div>
+        <div class="delta" id="wsTimeDelta"></div>
+      </div>
+      <div class="week-stat">
+        <div class="num" id="wsBooks">0</div>
+        <div class="lbl">Books touched</div>
+      </div>
+      <div class="week-stat">
+        <div class="num" id="wsLongest">0m</div>
+        <div class="lbl">Longest session</div>
+      </div>
+      <div class="week-stat">
+        <div class="num" id="wsWpm">—</div>
+        <div class="lbl">Avg WPM</div>
+        <div class="delta" id="wsWpmDelta"></div>
+      </div>
+    </div>
+    <div class="week-books" id="weekBooks" style="display:none;"></div>
+    <div class="week-insight" id="weekInsight" style="display:none;"></div>
+  </div>
 
   <div class="today-grid">
     <!-- LEFT: timer + history -->
@@ -275,7 +358,7 @@
   </div>
 </div>
 
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -285,11 +368,21 @@
 
   const { CATALOG, COVER_GRADIENTS, findBook, pickCoachNudge,
           startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
-          getTodayMinutes, getStreak, getLast14Days,
+          getTodayMinutes, getStreak, getLast14Days, computeWeekRecap,
           getCurrentBookId, setCurrentBookId,
           getBookProgress, setBookProgress,
           getShelves, getCustomBooks,
           fmtTime, fmtDay, Store, K, OL } = window.Chaptr;
+
+  function fmtDuration(mins) {
+    if (!mins) return '0m';
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return h > 0 ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+  }
+  function fmtMonthDay(d) {
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
 
   const DAILY_GOAL_MIN = Store.get(K.dailyGoalMin, 20);
   const RING_CIRC = 2 * Math.PI * 46;
@@ -496,7 +589,68 @@
     refreshStats();
     refreshCurrentBook();
     renderHistory();
+    renderWeekRecap();
   });
+
+  // ---------- weekly recap ----------
+  function renderWeekRecap() {
+    const r = computeWeekRecap();
+    const card = document.getElementById('weekCard');
+    // Show the card only if there's any history at all (this or last week)
+    if (!r.totalMs && !r.wpmPrev) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    card.classList.toggle('sunday', r.isSunday);
+    document.getElementById('weekEyebrow').textContent = r.isSunday ? 'Week wrap ✨' : 'This week';
+    document.getElementById('weekRange').textContent = `${fmtMonthDay(r.monday)} – ${fmtMonthDay(r.sunday)}`;
+    document.getElementById('weekTitle').textContent = r.isSunday
+      ? 'How your reading week shook out.'
+      : 'Your reading so far this week.';
+
+    document.getElementById('wsTime').textContent = fmtDuration(r.totalMinutes);
+    document.getElementById('wsBooks').textContent = r.bookIds.length;
+    document.getElementById('wsLongest').textContent = r.longestMinutes ? fmtDuration(r.longestMinutes) : '—';
+    if (!r.longestMinutes) document.getElementById('wsLongest').classList.add('dim');
+    document.getElementById('wsWpm').textContent = r.wpmThis || '—';
+    if (!r.wpmThis) document.getElementById('wsWpm').classList.add('dim');
+
+    // deltas
+    const timeDeltaEl = document.getElementById('wsTimeDelta');
+    if (r.timeDelta !== null) {
+      timeDeltaEl.textContent = `${r.timeDelta >= 0 ? '+' : ''}${r.timeDelta}% vs last wk`;
+      timeDeltaEl.className = 'delta ' + (r.timeDelta >= 0 ? 'up' : 'down');
+    } else timeDeltaEl.textContent = '';
+    const wpmDeltaEl = document.getElementById('wsWpmDelta');
+    if (r.wpmDelta !== null) {
+      wpmDeltaEl.textContent = `${r.wpmDelta >= 0 ? '+' : ''}${r.wpmDelta}% vs last wk`;
+      wpmDeltaEl.className = 'delta ' + (r.wpmDelta >= 0 ? 'up' : 'down');
+    } else wpmDeltaEl.textContent = '';
+
+    // books-touched row
+    const booksRow = document.getElementById('weekBooks');
+    if (r.bookIds.length) {
+      booksRow.style.display = '';
+      booksRow.innerHTML = `<span class="lbl">Touched:</span>` +
+        r.bookIds.slice(0, 6).map((id, i) => `<div class="b-cover" data-wb-cover="${i}" title="${findBook(id).title}"></div>`).join('') +
+        (r.bookIds.length > 6 ? `<span class="muted" style="font-size:.85rem;">+${r.bookIds.length - 6}</span>` : '');
+      r.bookIds.slice(0, 6).forEach((id, i) => {
+        const node = booksRow.querySelector(`[data-wb-cover="${i}"]`);
+        if (node) OL.applyCover(node, findBook(id), 'S');
+      });
+    } else booksRow.style.display = 'none';
+
+    // insight line
+    const insightEl = document.getElementById('weekInsight');
+    const insights = [];
+    if (r.timeDelta !== null && r.timeDelta >= 25) insights.push(`Big week — up ${r.timeDelta}% vs last week.`);
+    else if (r.timeDelta !== null && r.timeDelta <= -25) insights.push(`Lighter week than usual — down ${Math.abs(r.timeDelta)}% vs last.`);
+    if (r.wpmDelta !== null && r.wpmDelta >= 15) insights.push(`Pace is up ${r.wpmDelta}% vs last week.`);
+    if (r.longestMinutes >= 45) insights.push(`Your longest session this week ran ${fmtDuration(r.longestMinutes)} — that's deep focus.`);
+    if (r.bookIds.length >= 3) insights.push(`You bounced between ${r.bookIds.length} books — broad reading week.`);
+    if (insights.length) {
+      insightEl.style.display = '';
+      insightEl.innerHTML = `<span class="sparkle">✨</span>${insights[0]}`;
+    } else insightEl.style.display = 'none';
+  }
 
   // ---------- history ----------
   function fmtDuration(e) {
@@ -554,6 +708,7 @@
     renderCoach();
     renderTimerState();
     renderHistory();
+    renderWeekRecap();
     const s = getSession();
     if (s && !s.paused) startTick();
   } catch (err) {
