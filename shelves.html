@@ -97,7 +97,11 @@
 
 <script src="app.js"></script>
 <script>
-  const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf } = window.Chaptr;
+  const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf, OL } = window.Chaptr;
+
+  /* image-backed covers should fill the box */
+  document.head.insertAdjacentHTML('beforeend',
+    `<style>.shelf-row .cover-md { background-size: cover !important; background-position: center !important; }</style>`);
 
   let activeShelf = 'reading';
   const shelfLabels = { reading: 'Reading', wantToRead: 'Want to read', read: 'Read' };
@@ -121,7 +125,7 @@
       </div>`;
       return;
     }
-    el.innerHTML = ids.map(id => {
+    el.innerHTML = ids.map((id, i) => {
       const b = findBook(id);
       const buttons = ['reading', 'wantToRead', 'read'].map(target => {
         const cls = target === activeShelf ? 'move-btn current' : 'move-btn';
@@ -129,7 +133,7 @@
         return `<button class="${cls}" data-book="${id}" data-target="${target}" ${dis}>${shelfLabels[target]}</button>`;
       }).join('');
       return `<div class="shelf-row">
-        <div class="cover-md" style="background:${COVER_GRADIENTS(b.hue)}"></div>
+        <div class="cover-md" data-shelf-cover="${i}"></div>
         <div>
           <div class="title">${b.title}</div>
           <div class="meta">${b.author} · ${b.genre} · ${b.pages}p</div>
@@ -137,6 +141,10 @@
         <div class="row-actions">${buttons}</div>
       </div>`;
     }).join('');
+    ids.forEach((id, i) => {
+      const node = el.querySelector(`[data-shelf-cover="${i}"]`);
+      OL.applyCover(node, findBook(id), 'M');
+    });
     // wire move buttons
     el.querySelectorAll('.move-btn').forEach(btn => {
       if (btn.classList.contains('current')) return;

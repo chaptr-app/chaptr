@@ -82,6 +82,19 @@
   .result-row .cover-tiny { width: 40px; height: 58px; border-radius: 4px; }
   .result-row .t { font-family: var(--serif); }
   .result-row .a { font-size: .82rem; color: var(--ink-3); }
+
+  /* OpenLibrary search */
+  .search-card { background: var(--surface); }
+  .search-card .ask-input-row { margin-top: 14px; }
+  .search-status { margin-top: 12px; font-size: .85rem; color: var(--ink-3); min-height: 1.2em; }
+  .search-results { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+  .search-card .rec-card { background: var(--surface); }
+  .search-card .added { color: var(--success); font-weight: 600; font-size: .82rem; }
+
+  /* image-backed covers should fill the box, gradient still appears as bg fallback */
+  .rec-card .cover-lg, .shelf-card .mini, .cover-sm, .cover, .cover-tiny {
+    background-size: cover !important; background-position: center !important;
+  }
 </style>
 </head>
 <body>
@@ -140,6 +153,23 @@
 
   <section class="section-head">
     <div>
+      <div class="eyebrow">Search the catalog</div>
+      <h2>Real books, live from OpenLibrary.</h2>
+    </div>
+    <span class="pill">No API key needed</span>
+  </section>
+  <div class="card card-lg search-card" style="margin-top:14px;">
+    <p class="muted" style="margin:0 0 0;">Type a title, author, or topic. Add anything to a shelf and it'll show up across the app.</p>
+    <div class="ask-input-row">
+      <input class="ask-input" id="searchInput" placeholder="Pachinko · Min Jin Lee · or just 'space opera'">
+      <button class="btn btn-primary" id="searchBtn">Search</button>
+    </div>
+    <div class="search-status" id="searchStatus"></div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+
+  <section class="section-head">
+    <div>
       <div class="eyebrow">For you</div>
       <h2>Picked from your pace.</h2>
     </div>
@@ -184,7 +214,8 @@
 <script src="app.js"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, FOR_YOU, askClaude,
-          getShelves, Store, K } = window.Chaptr;
+          getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
+          Store, K, OL } = window.Chaptr;
 
   // ---------- For You ----------
   // augment recs with all catalog books so filters have something to bite into
@@ -218,10 +249,10 @@
       el.innerHTML = `<div class="muted" style="padding:20px 6px;">No books match that filter yet. Try a different chip.</div>`;
       return;
     }
-    el.innerHTML = recs.map(rec => {
+    el.innerHTML = recs.map((rec, i) => {
       const b = findBook(rec.bookId);
       return `<div class="rec-card">
-        <div class="cover-lg" style="background:${COVER_GRADIENTS(b.hue)}"></div>
+        <div class="cover-lg" data-cover-idx="${i}"></div>
         <div>
           <div class="title">${b.title}</div>
           <div class="author">${b.author} · ${b.genre} · ${b.pages}p</div>
@@ -229,6 +260,10 @@
         <div class="why"><span class="label">Why this?</span> ${rec.why}</div>
       </div>`;
     }).join('');
+    recs.forEach((rec, i) => {
+      const node = el.querySelector(`[data-cover-idx="${i}"]`);
+      OL.applyCover(node, findBook(rec.bookId), 'M');
+    });
   }
 
   function wireBrowseChips() {
@@ -253,39 +288,55 @@
       { key: 'read',       name: 'Read',        desc: 'Finished' },
     ];
     const el = document.getElementById('shelfGrid');
-    el.innerHTML = labels.map(l => {
+    el.innerHTML = labels.map((l, li) => {
       const ids = s[l.key].slice(0, 4);
-      const previews = ids.map(id => {
-        const b = findBook(id);
-        return `<div class="mini" style="background:${COVER_GRADIENTS(b.hue)}"></div>`;
-      }).join('');
-      return `<div class="shelf-card card">
+      const previews = ids.map((id, ix) => `<div class="mini" data-shelf="${li}" data-ix="${ix}"></div>`).join('');
+      return `<div class="shelf-card card" onclick="location.href='shelves.html'">
         <div class="label">${l.name}</div>
         <div class="count">${s[l.key].length}</div>
         <div class="muted" style="font-size:.85rem;">${l.desc}</div>
         <div class="preview">${previews || '<span class="muted" style="font-size:.85rem;">Empty</span>'}</div>
       </div>`;
     }).join('');
+    labels.forEach((l, li) => {
+      const ids = s[l.key].slice(0, 4);
+      ids.forEach((id, ix) => {
+        const node = el.querySelector(`[data-shelf="${li}"][data-ix="${ix}"]`);
+        OL.applyCover(node, findBook(id), 'S');
+      });
+    });
   }
 
   // ---------- Ask Claude ----------
   function runAsk(q) {
     if (!q || !q.trim()) return;
-    const { picks, rationale, query } = askClaude(q);
+    const { picks, rationale } = askClaude(q);
     const resEl = document.getElementById('askResults');
     resEl.innerHTML = `
       <div class="pill pill-primary">Based on: ${rationale} · your reader DNA</div>
       <div class="results-list">
-        ${picks.map(b => `
+        ${picks.map((b, i) => `
           <div class="result-row">
-            <div class="cover-tiny" style="background:${COVER_GRADIENTS(b.hue)}"></div>
+            <div class="cover-tiny" data-ask-cover="${i}"></div>
             <div>
               <div class="t">${b.title}</div>
               <div class="a">${b.author} · ${b.genre} · ${b.pages}p</div>
             </div>
-            <button class="btn btn-outline btn-sm">+ Shelf</button>
+            <button class="btn btn-outline btn-sm" data-add-ask="${b.id}">+ Shelf</button>
           </div>`).join('')}
       </div>`;
+    picks.forEach((b, i) => {
+      const node = resEl.querySelector(`[data-ask-cover="${i}"]`);
+      OL.applyCover(node, b, 'S');
+    });
+    resEl.querySelectorAll('[data-add-ask]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        moveToShelf(btn.dataset.addAsk, 'wantToRead');
+        btn.textContent = '✓ On shelf';
+        btn.disabled = true;
+        renderShelves();
+      });
+    });
   }
 
   document.getElementById('askBtn').addEventListener('click', () => {
@@ -318,6 +369,67 @@
       }
     }
   }
+
+  // ---------- OpenLibrary search ----------
+  let searchInFlight = null;
+  async function runSearch(query) {
+    const q = (query || '').trim();
+    const statusEl = document.getElementById('searchStatus');
+    const resEl = document.getElementById('searchResults');
+    if (!q) { statusEl.textContent = ''; resEl.innerHTML = ''; return; }
+    statusEl.textContent = 'Searching OpenLibrary…';
+    resEl.innerHTML = '';
+    const token = (searchInFlight = Symbol());
+    try {
+      const results = await OL.search(q);
+      if (token !== searchInFlight) return;
+      if (!results.length) { statusEl.textContent = 'No matches. Try a different query.'; return; }
+      statusEl.textContent = `Showing ${results.length} results.`;
+      const onShelf = (id) => {
+        const s = getShelves();
+        return ['reading','wantToRead','read'].some(k => s[k].includes(id));
+      };
+      resEl.innerHTML = results.map((b, i) => `
+        <div class="rec-card">
+          <div class="cover-lg" data-sr-cover="${i}"></div>
+          <div>
+            <div class="title">${escapeHtml(b.title)}</div>
+            <div class="author">${escapeHtml(b.author)} · ${b.genre} · ${b.pages}p${b.year ? ' · ' + b.year : ''}</div>
+          </div>
+          <div class="why">
+            ${onShelf(b.id)
+              ? `<span class="added">✓ Already on a shelf</span>`
+              : `<button class="btn btn-outline btn-sm" data-add="${i}">+ Want to read</button>`}
+          </div>
+        </div>`).join('');
+      results.forEach((b, i) => {
+        const node = resEl.querySelector(`[data-sr-cover="${i}"]`);
+        OL.applyCover(node, b, 'M');
+      });
+      resEl.querySelectorAll('[data-add]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.add, 10);
+          const b = results[idx];
+          addCustomBook(b);
+          moveToShelf(b.id, 'wantToRead');
+          btn.outerHTML = `<span class="added">✓ Added</span>`;
+          renderShelves();
+        });
+      });
+    } catch (e) {
+      if (token !== searchInFlight) return;
+      statusEl.textContent = 'Search failed: ' + e.message;
+    }
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  document.getElementById('searchBtn').addEventListener('click', () => {
+    runSearch(document.getElementById('searchInput').value);
+  });
+  document.getElementById('searchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runSearch(e.target.value);
+  });
 
   // init
   renderForYou();

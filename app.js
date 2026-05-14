@@ -39,7 +39,110 @@ const CATALOG = [
 const COVER_GRADIENTS = (hue) =>
   `linear-gradient(135deg, hsl(${hue},45%,35%), hsl(${(hue+40)%360},55%,55%))`;
 
-function findBook(id) { return CATALOG.find(b => b.id === id) || CATALOG[0]; }
+function hashHue(s) {
+  let h = 0;
+  for (let i = 0; i < (s || '').length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 360;
+}
+
+// ---------- custom books (added via OpenLibrary search) ----------
+function getCustomBooks() { return Store.get('chaptr.customBooks', {}); }
+function setCustomBooks(m) { Store.set('chaptr.customBooks', m); }
+function addCustomBook(book) {
+  const m = getCustomBooks();
+  m[book.id] = book;
+  setCustomBooks(m);
+}
+
+function findBook(id) {
+  const seed = CATALOG.find(b => b.id === id);
+  if (seed) return seed;
+  const custom = getCustomBooks()[id];
+  if (custom) return custom;
+  return CATALOG[0];
+}
+
+// ---------- OpenLibrary integration (browser-side) ----------
+const OL = {
+  cache: {},  // in-memory, backed by localStorage
+  coverCacheKey(title, author) { return 'chaptr.cover.' + (title || '') + '|' + (author || ''); },
+
+  async fetchCoverId(title, author) {
+    const ck = OL.coverCacheKey(title, author);
+    if (OL.cache[ck] !== undefined) return OL.cache[ck];
+    const stored = Store.get(ck, undefined);
+    if (stored !== undefined) { OL.cache[ck] = stored; return stored; }
+    try {
+      const q = encodeURIComponent((title || '') + ' ' + (author || ''));
+      const url = `https://openlibrary.org/search.json?q=${q}&fields=cover_i&limit=1`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('OL ' + res.status);
+      const data = await res.json();
+      const id = data.docs && data.docs[0] && data.docs[0].cover_i ? data.docs[0].cover_i : null;
+      OL.cache[ck] = id;
+      Store.set(ck, id);
+      return id;
+    } catch (e) {
+      OL.cache[ck] = null;
+      return null;
+    }
+  },
+
+  coverUrl(coverId, size) {
+    return coverId ? `https://covers.openlibrary.org/b/id/${coverId}-${size || 'M'}.jpg` : null;
+  },
+
+  // If book already has coverId, use it. Otherwise fetch by title+author.
+  applyCover(el, book, size) {
+    if (!el || !book) return;
+    el.style.background = COVER_GRADIENTS(book.hue != null ? book.hue : hashHue(book.title));
+    const setBg = (coverId) => {
+      if (!coverId || !el.isConnected) return;
+      const u = OL.coverUrl(coverId, size);
+      const img = new Image();
+      img.onload = () => {
+        if (el.isConnected) {
+          el.style.background = `center/cover no-repeat url("${u}")`;
+        }
+      };
+      img.src = u;
+    };
+    if (book.coverId) { setBg(book.coverId); return; }
+    OL.fetchCoverId(book.title, book.author).then(setBg);
+  },
+
+  async search(query) {
+    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year,number_of_pages_median,subject&limit=12`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('OL ' + res.status);
+    const data = await res.json();
+    return (data.docs || []).map(d => {
+      const author = (d.author_name && d.author_name[0]) || 'Unknown';
+      const title = d.title || 'Untitled';
+      const olid = (d.key || '').replace('/works/', '');
+      return {
+        id: 'ol_' + olid,
+        olid,
+        title,
+        author,
+        genre: guessGenre(d.subject || []),
+        pages: d.number_of_pages_median || 320,
+        coverId: d.cover_i || null,
+        hue: hashHue(title + author),
+        year: d.first_publish_year || null,
+      };
+    });
+  },
+};
+
+function guessGenre(subjects) {
+  const s = (subjects || []).join(' ').toLowerCase();
+  if (/thriller|crime|suspense|mystery/.test(s)) return 'Thriller';
+  if (/science fiction|sci-fi|space/.test(s))    return 'Sci-fi';
+  if (/biograph|history|memoir|nonfiction/.test(s)) return 'Non-fiction';
+  if (/fantasy|magic/.test(s)) return 'Fantasy';
+  return 'Literary';
+}
 
 // ---------- ambient Claude content ----------
 const COACH_NUDGES = [
@@ -235,13 +338,15 @@ function fmtDay(iso) {
 
 // expose
 window.Chaptr = {
-  Store, K, CATALOG, COVER_GRADIENTS, findBook,
+  Store, K, CATALOG, COVER_GRADIENTS, hashHue, findBook,
+  getCustomBooks, addCustomBook,
   COACH_NUDGES, pickCoachNudge, FOR_YOU, askClaude,
   startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
   getTodayMinutes, getStreak, getLast14Days,
   getShelves, setShelves, shelfFor, moveToShelf,
   getCurrentBookId, setCurrentBookId,
   fmtTime, fmtDay,
+  OL,
 };
 
 })();

@@ -286,7 +286,7 @@
           startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
           getTodayMinutes, getStreak, getLast14Days,
           getCurrentBookId, setCurrentBookId,
-          fmtTime, fmtDay, Store, K } = window.Chaptr;
+          fmtTime, fmtDay, Store, K, OL } = window.Chaptr;
 
   const DAILY_GOAL_MIN = Store.get(K.dailyGoalMin, 20);
   const RING_CIRC = 2 * Math.PI * 46;
@@ -324,7 +324,7 @@
   function refreshCurrentBook() {
     const id = getCurrentBookId();
     const b = findBook(id);
-    document.getElementById('ccCover').style.background = COVER_GRADIENTS(b.hue);
+    OL.applyCover(document.getElementById('ccCover'), b, 'M');
     document.getElementById('ccTitle').textContent = b.title;
     document.getElementById('ccAuthor').textContent = b.author;
     const pct = Math.floor(((b.id.charCodeAt(1) || 1) * 13) % 60) + 20;
@@ -347,8 +347,9 @@
       const btn = document.createElement('button');
       btn.className = 'book-pick' + (b.id === currentId ? ' selected' : '');
       btn.innerHTML = `
-        <div class="cover-sm" style="background:${COVER_GRADIENTS(b.hue)}"></div>
+        <div class="cover-sm" data-cover></div>
         <div><div class="t">${b.title}</div><div class="a">${b.author} · ${b.genre}</div></div>`;
+      OL.applyCover(btn.querySelector('[data-cover]'), b, 'S');
       btn.addEventListener('click', () => {
         setCurrentBookId(b.id);
         renderBookPicker();
