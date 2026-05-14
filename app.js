@@ -472,10 +472,62 @@ function mountBottomNav() {
   document.body.appendChild(nav);
 }
 
+// ---------- mobile: persistent "Now Reading" pill ----------
+function mountNowReadingPill() {
+  if (document.querySelector('.now-reading-pill')) return;
+  // Skip on Today — it already has the full timer card
+  const here = (location.pathname.split('/').pop() || '').toLowerCase();
+  if (here === 'today.html') return;
+
+  const pill = document.createElement('a');
+  pill.className = 'now-reading-pill';
+  pill.href = 'today.html';
+  pill.setAttribute('aria-label', 'Resume reading session');
+  pill.innerHTML = `
+    <div class="nrp-cover" data-nrp-cover></div>
+    <div class="nrp-meta">
+      <div class="nrp-eyebrow">Reading <span class="nrp-dot"></span><span class="nrp-paused-label">Paused</span></div>
+      <div class="nrp-title" data-nrp-title>—</div>
+    </div>
+    <div class="nrp-time" data-nrp-time>00:00</div>
+  `;
+  document.body.appendChild(pill);
+
+  let lastBookId = null;
+  let lastText = '';
+  let rafId = null;
+  function tickPill() {
+    const s = getSession();
+    if (!s) {
+      pill.classList.remove('active');
+      document.body.classList.remove('has-now-reading-pill');
+      lastBookId = null;
+    } else {
+      pill.classList.add('active');
+      pill.classList.toggle('paused', !!s.paused);
+      document.body.classList.add('has-now-reading-pill');
+      if (s.bookId !== lastBookId) {
+        const b = findBook(s.bookId);
+        pill.querySelector('[data-nrp-title]').textContent = b.title;
+        OL.applyCover(pill.querySelector('[data-nrp-cover]'), b, 'S');
+        lastBookId = s.bookId;
+      }
+      const text = fmtTime(elapsedMs(s));
+      if (text !== lastText) {
+        pill.querySelector('[data-nrp-time]').textContent = text;
+        lastText = text;
+      }
+    }
+    rafId = requestAnimationFrame(tickPill);
+  }
+  rafId = requestAnimationFrame(tickPill);
+}
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', mountBottomNav);
+  document.addEventListener('DOMContentLoaded', () => { mountBottomNav(); mountNowReadingPill(); });
 } else {
   mountBottomNav();
+  mountNowReadingPill();
 }
 
 // ---------- swipe gesture helper ----------
@@ -515,7 +567,7 @@ window.Chaptr = {
   getReviews, getReview, setReview,
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
-  attachSwipe, mountBottomNav,
+  attachSwipe, mountBottomNav, mountNowReadingPill,
   OL,
 };
 
