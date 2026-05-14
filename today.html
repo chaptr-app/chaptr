@@ -460,6 +460,9 @@
   const dlg = document.getElementById('stopDialog');
   let chosenMood = null;
   function openStopDialog() {
+    pauseSession();
+    stopTick();
+    tickLoop(); // one final frame so the display freezes at the paused time
     chosenMood = null;
     document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
     const id = getCurrentBookId();
@@ -467,10 +470,14 @@
     document.getElementById('startPage').value = lastPage;
     document.getElementById('endPage').value = lastPage;
     dlg.classList.add('open');
-    // focus end page so user just types where they stopped
     setTimeout(() => document.getElementById('endPage').focus(), 50);
   }
-  document.getElementById('cancelStop').addEventListener('click', () => dlg.classList.remove('open'));
+  document.getElementById('cancelStop').addEventListener('click', () => {
+    dlg.classList.remove('open');
+    resumeSession();
+    renderTimerState();
+    startTick();
+  });
   document.querySelectorAll('.mood-btn').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.mood-btn').forEach(x => x.classList.remove('selected'));
     b.classList.add('selected');
