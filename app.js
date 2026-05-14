@@ -114,8 +114,20 @@ const OL = {
 
   async search(query) {
     const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year,number_of_pages_median,subject&limit=12`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('OL ' + res.status);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    let res;
+    try {
+      res = await fetch(url, { signal: controller.signal });
+    } catch (e) {
+      const msg = e.name === 'AbortError'
+        ? 'OpenLibrary took too long to respond. Try again.'
+        : 'Could not reach OpenLibrary. Check your connection or try again shortly.';
+      throw new Error(msg);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) throw new Error('OpenLibrary returned an error (' + res.status + '). Try again.');
     const data = await res.json();
     return (data.docs || []).map(d => {
       const author = (d.author_name && d.author_name[0]) || 'Unknown';

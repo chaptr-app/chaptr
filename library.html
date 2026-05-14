@@ -418,7 +418,8 @@
       });
     } catch (e) {
       if (token !== searchInFlight) return;
-      statusEl.textContent = 'Search failed: ' + e.message;
+      statusEl.innerHTML = e.message + ' <button class="btn btn-outline btn-sm" id="retryBtn">Retry</button>';
+      document.getElementById('retryBtn')?.addEventListener('click', () => runSearch(query));
     }
   }
   function escapeHtml(s) {
