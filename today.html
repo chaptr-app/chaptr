@@ -498,36 +498,46 @@
   });
 
   // ---------- history ----------
+  function fmtDuration(e) {
+    if (e.minutes >= 1) return e.minutes + 'm';
+    const secs = e.ms ? Math.round(e.ms / 1000) : 0;
+    return secs > 0 ? secs + 's' : '< 1m';
+  }
+
   function renderHistory() {
     const days = getLast14Days();
-    const max = Math.max(20, ...days.map(d => d.minutes));
+    // use ms for sparkline precision so sub-minute sessions still show bars
+    const hist14 = Store.get(K.history, []);
+    const msByDay = {};
+    for (const e of hist14) msByDay[e.date] = (msByDay[e.date] || 0) + (e.ms || e.minutes * 60000);
+    const sparkleDays = days.map(d => ({ ...d, ms: msByDay[d.date] || 0 }));
+    const maxMs = Math.max(60000, ...sparkleDays.map(d => d.ms)); // floor at 1 min
     const svg = document.getElementById('sparkline');
     const W = 280, H = 90, gap = 2, bw = (W - gap * 13) / 14;
     const todayKey = new Date().toISOString().slice(0,10);
     let html = '';
-    days.forEach((d, i) => {
-      const h = Math.max(2, (d.minutes / max) * (H - 14));
+    sparkleDays.forEach((d, i) => {
+      const h = Math.max(2, (d.ms / maxMs) * (H - 14));
       const x = i * (bw + gap);
       const y = H - h;
       html += `<rect class="spark-bar ${d.date === todayKey ? 'today' : ''}" x="${x}" y="${y}" width="${bw}" height="${h}" rx="2"></rect>`;
     });
-    // light axis
     html += `<text class="spark-axis" x="0" y="${H-1}">${days[0].date.slice(5)}</text>`;
     html += `<text class="spark-axis" x="${W-30}" y="${H-1}">today</text>`;
     svg.innerHTML = html;
 
-    const hist = Store.get(K.history, []).slice(-5).reverse();
+    const recent = Store.get(K.history, []).slice(-5).reverse();
     const rows = document.getElementById('recentRows');
-    if (!hist.length) {
+    if (!recent.length) {
       rows.innerHTML = `<div class="muted" style="padding:10px 0;">No sessions logged yet. Start a timer above ↑</div>`;
       return;
     }
-    rows.innerHTML = hist.map(e => {
+    rows.innerHTML = recent.map(e => {
       const b = findBook(e.bookId);
       return `<div class="recent-row">
         <span class="muted">${fmtDay(e.date)}</span>
         <span class="col-title">${b.title}</span>
-        <span class="muted">${e.minutes}m</span>
+        <span class="muted">${fmtDuration(e)}</span>
         <span class="muted">${e.pages ? e.pages + 'p' : ''}</span>
         <span>${e.mood || ''}</span>
       </div>`;

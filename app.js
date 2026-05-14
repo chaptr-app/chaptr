@@ -233,6 +233,7 @@ function stopSession({ endPage, startPage, mood }) {
     bookId: s.bookId,
     date: new Date().toISOString().slice(0, 10),
     minutes,
+    ms,
     pages,
     wpm,
     mood: mood || null,
