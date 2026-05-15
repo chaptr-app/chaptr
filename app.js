@@ -66,7 +66,10 @@ const Auth = {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
           s.crossOrigin = 'anonymous';
-          s.dataset.clerkPublishableKey = key;
+          // NOTE: do NOT set data-clerk-publishable-key here. With that attribute,
+          // the SDK auto-instantiates window.Clerk as an *instance*, which makes
+          // `new window.Clerk(...)` below throw "is not a constructor". Without
+          // the attribute, window.Clerk stays a class we can instantiate ourselves.
           s.src = `https://${domain}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
           s.async = true;
           s.onload = resolve;
@@ -75,7 +78,10 @@ const Auth = {
         });
       }
 
-      this._clerk = new window.Clerk(key);
+      // If something else already instantiated Clerk, reuse that instance.
+      this._clerk = (typeof window.Clerk === 'function')
+        ? new window.Clerk(key)
+        : window.Clerk;
       await this._clerk.load();
       this._user = this._clerk.user || null;
 
