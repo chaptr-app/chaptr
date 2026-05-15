@@ -22,6 +22,109 @@ const Store = {
   },
 };
 
+// ---------- auth (V2 Phase 1B — Clerk) ----------
+// Drop-in Clerk integration. The publishable key is stored in localStorage so it can be
+// configured from Profile without code edits. The key encodes the Clerk instance domain
+// (base64 between pk_test_/pk_live_ and a trailing $) so we can load the SDK dynamically.
+const Auth = {
+  _clerk: null,
+  _user: null,
+  _loadPromise: null,
+  _listeners: [],
+
+  publishableKey() { return (localStorage.getItem('chaptr.clerkKey') || '').replace(/^"|"$/g, ''); },
+  setPublishableKey(k) { localStorage.setItem('chaptr.clerkKey', (k || '').trim()); },
+  configured() { return !!this.publishableKey(); },
+  signedIn() { return !!this._user; },
+  user() { return this._user; },
+  // Returns Clerk user_id if signed in, otherwise the anonymous device id.
+  effectiveUserId() { return this._user?.id ? 'clerk_' + this._user.id.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 56) : getDeviceId(); },
+
+  instanceDomain() {
+    const key = this.publishableKey();
+    if (!key) return null;
+    try {
+      const encoded = key.replace(/^pk_(test|live)_/, '');
+      const decoded = atob(encoded);
+      return decoded.replace(/\$$/, '');
+    } catch { return null; }
+  },
+
+  on(fn) { this._listeners.push(fn); return () => { this._listeners = this._listeners.filter(f => f !== fn); }; },
+  _notify() { this._listeners.forEach(fn => { try { fn(this); } catch {} }); },
+
+  async load() {
+    if (this._loadPromise) return this._loadPromise;
+    const key = this.publishableKey();
+    if (!key) return null;
+
+    this._loadPromise = (async () => {
+      const domain = this.instanceDomain();
+      if (!domain) throw new Error('Invalid Clerk publishable key');
+
+      if (!window.Clerk) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.crossOrigin = 'anonymous';
+          s.dataset.clerkPublishableKey = key;
+          s.src = `https://${domain}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
+          s.async = true;
+          s.onload = resolve;
+          s.onerror = () => reject(new Error('Failed to load Clerk SDK from ' + domain));
+          document.head.appendChild(s);
+        });
+      }
+
+      this._clerk = new window.Clerk(key);
+      await this._clerk.load();
+      this._user = this._clerk.user || null;
+
+      // React to sign-in / sign-out events
+      this._clerk.addListener(({ user }) => {
+        const wasSignedIn = !!this._user;
+        const isSignedIn = !!user;
+        this._user = user || null;
+        if (isSignedIn && !wasSignedIn) this._onSignIn();
+        else if (!isSignedIn && wasSignedIn) this._onSignOut();
+        this._notify();
+      });
+
+      this._notify();
+      return this._clerk;
+    })();
+    return this._loadPromise;
+  },
+
+  async _onSignIn() {
+    // First-time sign-in on this browser: migrate the current localStorage
+    // (which is keyed under deviceId on the server) into the new Clerk user.
+    // We just push our current local state under the new effective user id.
+    try {
+      if (typeof Sync !== 'undefined' && Sync.enabled()) {
+        // Try to pull existing Clerk-user data first; if none, push our local state.
+        const res = await Sync.pull();
+        if (res?.ok && !res.hydrated) await Sync.pushNow();
+      }
+    } catch (e) { console.warn('[Chaptr] post-sign-in sync failed:', e); }
+  },
+
+  _onSignOut() {
+    // Fall back to device-id sync. Local data is left intact for re-login.
+  },
+
+  async openSignIn() {
+    await this.load();
+    if (this._clerk?.openSignIn) this._clerk.openSignIn();
+  },
+  async openSignUp() {
+    await this.load();
+    if (this._clerk?.openSignUp) this._clerk.openSignUp();
+  },
+  async signOut() {
+    if (this._clerk?.signOut) await this._clerk.signOut();
+  },
+};
+
 // ---------- snapshot sync (V2 Phase 1A) ----------
 // Single-blob sync: every chaptr.* localStorage key is serialized into one snapshot
 // and shipped to the Worker. Pull on boot hydrates from server (newest version wins).
@@ -53,6 +156,8 @@ const Sync = {
       lastSyncResult: localStorage.getItem('chaptr.lastSyncResult') || null,
       version: this._lastVersion,
       deviceId: getDeviceId(),
+      effectiveUserId: (typeof Auth !== 'undefined') ? Auth.effectiveUserId() : getDeviceId(),
+      signedIn: (typeof Auth !== 'undefined') ? Auth.signedIn() : false,
     };
   },
   on(fn) { this._listeners.push(fn); return () => { this._listeners = this._listeners.filter(f => f !== fn); }; },
@@ -90,7 +195,7 @@ const Sync = {
     if (this._inflight) return this._inflight;
     const body = JSON.stringify({ snapshot: this.buildSnapshot() });
     const url = this.workerUrl() + '/sync';
-    const userId = getDeviceId();
+    const userId = Auth.effectiveUserId();
     this._inflight = fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Chaptr-User': userId },
@@ -114,7 +219,7 @@ const Sync = {
   async pull() {
     if (!this.enabled()) return { ok: false, error: 'No worker URL configured' };
     const url = this.workerUrl() + '/load';
-    const userId = getDeviceId();
+    const userId = Auth.effectiveUserId();
     try {
       const resp = await fetch(url, {
         method: 'GET',
@@ -147,7 +252,7 @@ const Sync = {
     try {
       const resp = await fetch(this.workerUrl() + '/me', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Chaptr-User': getDeviceId() },
+        headers: { 'Content-Type': 'application/json', 'X-Chaptr-User': Auth.effectiveUserId() },
       });
       const data = await resp.json().catch(() => ({}));
       return resp.ok ? data : null;
@@ -1136,12 +1241,20 @@ function bootCommon() {
   try { startBackgroundPauseWatcher(); } catch {}
   mountBottomNav();
   mountNowReadingPill();
-  // Kick off backend sync if configured. Runs in background — UI doesn't wait.
-  try {
-    if (Sync.enabled()) {
-      Sync.ensureUser().then(() => Sync.pull()).catch(() => {});
-    }
-  } catch {}
+  // Kick off auth + backend sync if configured. Runs in background — UI doesn't wait.
+  (async () => {
+    try {
+      if (Auth.configured()) {
+        await Auth.load().catch((e) => console.warn('[Chaptr] Clerk load failed:', e));
+      }
+    } catch {}
+    try {
+      if (Sync.enabled()) {
+        await Sync.ensureUser();
+        await Sync.pull();
+      }
+    } catch {}
+  })();
 }
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootCommon);
@@ -1199,7 +1312,7 @@ window.Chaptr = {
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
   attachSwipe, mountBottomNav, mountNowReadingPill,
-  Sync, getDeviceId,
+  Sync, Auth, getDeviceId,
   OL,
 };
 

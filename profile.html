@@ -253,6 +253,41 @@
   </section>
 
   <section class="section">
+    <div class="eyebrow">Account · V2 Phase 1B</div>
+    <h2>Sign in to sync across devices.</h2>
+    <p class="muted" style="margin-top:4px;">Real accounts via Clerk. Without an account, your sync uses a per-browser device ID.</p>
+    <div class="card" style="margin-top:14px;" id="accountCard">
+      <div id="accountSignedOut" style="display:none;">
+        <p class="muted" style="margin:0 0 12px;">Not signed in. Your data is linked to this browser only.</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-primary" id="authSignInBtn">Sign in</button>
+          <button class="btn btn-outline" id="authSignUpBtn">Create account</button>
+        </div>
+      </div>
+      <div id="accountSignedIn" style="display:none;">
+        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+          <div class="avatar" id="authAvatar" style="width:48px; height:48px; font-size:1.2rem;">–</div>
+          <div style="flex:1; min-width:200px;">
+            <div style="font-weight:600;" id="authUserName">Reader</div>
+            <div class="muted" style="font-size:.85rem;" id="authUserEmail"></div>
+          </div>
+          <button class="btn btn-outline btn-sm" id="authSignOutBtn">Sign out</button>
+        </div>
+      </div>
+      <div id="accountUnconfigured" style="display:none;">
+        <p class="muted" style="margin:0 0 8px;">Paste your Clerk publishable key to enable accounts:</p>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="clerkKeyInput" placeholder="pk_test_..."
+            style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink); font-family:monospace; font-size:.82rem;">
+          <button class="btn btn-outline btn-sm" id="saveClerkKeyBtn">Save</button>
+        </div>
+        <p class="muted" style="font-size:.78rem; margin-top:8px;">Get yours at <a href="https://dashboard.clerk.com" target="_blank">dashboard.clerk.com</a> → API keys.</p>
+      </div>
+      <div id="authError" style="display:none; margin-top:12px; padding:10px 12px; background:#FEF2F2; color:var(--danger); border-radius:var(--r-sm); font-size:.85rem;"></div>
+    </div>
+  </section>
+
+  <section class="section">
     <div class="eyebrow">Cloud sync · V2 preview</div>
     <h2>Your data, across devices.</h2>
     <p class="muted" style="margin-top:4px;">Snapshot sync via your Cloudflare Worker. Anonymous device ID for now — real accounts arrive in Phase 1B.</p>
@@ -353,14 +388,14 @@
   </div>
 </footer>
 
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
           getYearChallenge, setYearChallenge, getYearChallengeProgress,
           getAISettings, setAISetting, exportReaderProfile, wipeReaderProfile,
           getGoalType, setGoalType, getDailyGoalPages, setDailyGoalPages,
-          Sync, getDeviceId,
+          Sync, Auth, getDeviceId,
           Store, K } = window.Chaptr;
 
   const LEVEL_COLORS = ['#F4EFE6', 'hsl(150,30%,80%)', 'hsl(150,32%,60%)', 'hsl(150,38%,45%)', '#2D4A3E'];
@@ -515,6 +550,68 @@
     document.getElementById('calLongestRun').textContent = longest;
   }
 
+  // --- account (V2 Phase 1B — Clerk) ---
+  function initials(name, email) {
+    const src = (name || email || 'R').trim();
+    const parts = src.split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return src.slice(0, 2).toUpperCase();
+  }
+  function renderAuth() {
+    const configured = Auth.configured();
+    const signedIn = Auth.signedIn();
+    const u = Auth.user();
+    document.getElementById('accountUnconfigured').style.display = configured ? 'none' : '';
+    document.getElementById('accountSignedOut').style.display   = (configured && !signedIn) ? '' : 'none';
+    document.getElementById('accountSignedIn').style.display    = (configured && signedIn) ? '' : 'none';
+    if (signedIn && u) {
+      const name = u.fullName || u.firstName || u.username || '';
+      const email = u.primaryEmailAddress?.emailAddress || u.emailAddresses?.[0]?.emailAddress || '';
+      document.getElementById('authUserName').textContent = name || email || 'Reader';
+      document.getElementById('authUserEmail').textContent = email;
+      document.getElementById('authAvatar').textContent = initials(name, email);
+      // Refresh the navbar avatar letter / persona section if present
+      const avatarEl = document.querySelector('.avatar');
+      if (avatarEl && avatarEl.id !== 'authAvatar') avatarEl.textContent = initials(name, email).slice(0, 1);
+      const readerName = document.getElementById('readerName');
+      if (readerName) readerName.textContent = name || email.split('@')[0] || 'Reader';
+    }
+  }
+  function wireAuth() {
+    document.getElementById('saveClerkKeyBtn').addEventListener('click', () => {
+      const v = document.getElementById('clerkKeyInput').value.trim();
+      const err = document.getElementById('authError');
+      err.style.display = 'none';
+      if (!/^pk_(test|live)_[A-Za-z0-9+/=_-]+$/.test(v)) {
+        err.style.display = '';
+        err.textContent = 'That doesn\'t look like a Clerk publishable key. Should start with pk_test_ or pk_live_.';
+        return;
+      }
+      Auth.setPublishableKey(v);
+      location.reload();
+    });
+    document.getElementById('authSignInBtn').addEventListener('click', async () => {
+      try { await Auth.openSignIn(); }
+      catch (e) {
+        const err = document.getElementById('authError');
+        err.style.display = ''; err.textContent = 'Sign-in failed: ' + e.message;
+      }
+    });
+    document.getElementById('authSignUpBtn').addEventListener('click', async () => {
+      try { await Auth.openSignUp(); }
+      catch (e) {
+        const err = document.getElementById('authError');
+        err.style.display = ''; err.textContent = 'Sign-up failed: ' + e.message;
+      }
+    });
+    document.getElementById('authSignOutBtn').addEventListener('click', async () => {
+      await Auth.signOut();
+      renderAuth();
+      renderSyncStatus();
+    });
+    Auth.on(() => { renderAuth(); renderSyncStatus(); });
+  }
+
   // --- cloud sync (V2 Phase 1A) ---
   function fmtAgo(iso) {
     if (!iso) return 'never';
@@ -526,7 +623,9 @@
   }
   function renderSyncStatus() {
     const s = Sync.status();
-    document.getElementById('syncDeviceId').textContent = s.deviceId;
+    document.getElementById('syncDeviceId').textContent = s.signedIn
+      ? `${s.effectiveUserId}  (signed in)`
+      : `${s.deviceId}  (anonymous)`;
     document.getElementById('syncWhen').textContent =
       (s.lastSyncAt ? fmtAgo(s.lastSyncAt) : 'never') + (s.lastSyncResult && s.lastSyncResult !== 'ok' ? ' · ' + s.lastSyncResult : '');
     const badge = document.getElementById('syncBadge');
@@ -538,7 +637,7 @@
       badge.textContent = 'Error';
       statusEl.textContent = 'Last attempt failed. Check the Worker is deployed with D1 bound.';
     } else {
-      badge.textContent = 'On';
+      badge.textContent = s.signedIn ? 'On · signed in' : 'On · anonymous';
       statusEl.textContent = 'Auto-syncs after every change. Pull on app boot.';
     }
   }
@@ -680,6 +779,8 @@
   }
 
   renderStats();
+  renderAuth();
+  wireAuth();
   renderSyncStatus();
   wireSync();
   renderChallenge();
