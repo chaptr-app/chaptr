@@ -124,13 +124,26 @@ const Auth = {
     // Fall back to device-id sync. Local data is left intact for re-login.
   },
 
+  // Clerk's default OAuth redirect is the bare origin, which 404s on GitHub
+  // Pages projects served from a subpath (chaptr-app.github.io/chaptr/...).
+  // Force Clerk to come back to wherever the user clicked Sign in.
+  _redirectOpts() {
+    const here = window.location.href;
+    return {
+      afterSignInUrl: here,
+      afterSignUpUrl: here,
+      redirectUrl: here,
+      signInForceRedirectUrl: here,
+      signUpForceRedirectUrl: here,
+    };
+  },
   async openSignIn() {
     await this.load();
-    if (this._clerk?.openSignIn) this._clerk.openSignIn();
+    if (this._clerk?.openSignIn) this._clerk.openSignIn(this._redirectOpts());
   },
   async openSignUp() {
     await this.load();
-    if (this._clerk?.openSignUp) this._clerk.openSignUp();
+    if (this._clerk?.openSignUp) this._clerk.openSignUp(this._redirectOpts());
   },
   async signOut() {
     if (this._clerk?.signOut) await this._clerk.signOut();
