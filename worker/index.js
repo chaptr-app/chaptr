@@ -34,6 +34,102 @@ function isValidUserId(id) {
   return typeof id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(id);
 }
 
+// ---------- Clerk JWT verification (Phase 1C) ----------
+// Cached at module scope; survives within a single isolate, refreshes hourly.
+let _jwksCache = null;
+let _jwksFetchedAt = 0;
+const JWKS_TTL_MS = 60 * 60 * 1000;
+
+async function getClerkJwks(env) {
+  if (!env.CLERK_FRONTEND_API) throw new Error('CLERK_FRONTEND_API not configured');
+  if (_jwksCache && (Date.now() - _jwksFetchedAt) < JWKS_TTL_MS) return _jwksCache;
+  const url = `https://${env.CLERK_FRONTEND_API}/.well-known/jwks.json`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('JWKS fetch failed: ' + resp.status);
+  _jwksCache = await resp.json();
+  _jwksFetchedAt = Date.now();
+  return _jwksCache;
+}
+
+function base64UrlToBytes(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function base64UrlToString(s) {
+  const bytes = base64UrlToBytes(s);
+  return new TextDecoder().decode(bytes);
+}
+
+async function verifyClerkToken(token, env) {
+  const parts = (token || '').split('.');
+  if (parts.length !== 3) throw new Error('Malformed JWT');
+  const [hB64, pB64, sB64] = parts;
+
+  const header = JSON.parse(base64UrlToString(hB64));
+  const payload = JSON.parse(base64UrlToString(pB64));
+
+  if (header.alg !== 'RS256') throw new Error('Unsupported alg: ' + header.alg);
+  if (!header.kid) throw new Error('Missing kid');
+
+  const now = Math.floor(Date.now() / 1000);
+  // 30s clock-skew leeway in both directions
+  if (payload.exp && payload.exp + 30 < now) throw new Error('Token expired');
+  if (payload.nbf && payload.nbf - 30 > now) throw new Error('Token not yet valid');
+
+  const expectedIss = `https://${env.CLERK_FRONTEND_API}`;
+  if (payload.iss !== expectedIss) throw new Error('Issuer mismatch: ' + payload.iss);
+
+  const jwks = await getClerkJwks(env);
+  const jwk = jwks.keys.find(k => k.kid === header.kid);
+  if (!jwk) throw new Error('No JWKS key for kid ' + header.kid);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'jwk',
+    { kty: jwk.kty, n: jwk.n, e: jwk.e, alg: 'RS256', ext: true },
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  );
+  const data = new TextEncoder().encode(hB64 + '.' + pB64);
+  const signature = base64UrlToBytes(sB64);
+  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, signature, data);
+  if (!ok) throw new Error('Bad signature');
+
+  if (!payload.sub) throw new Error('Token has no sub');
+  return payload;
+}
+
+// Resolve the authenticated user for a request. Returns { userId, verified, error? }.
+// - Authorization: Bearer <token> → verified Clerk user
+// - X-Chaptr-User → anonymous device ID (must NOT look like a clerk id without a token)
+async function resolveUserId(request, env) {
+  const authHeader = request.headers.get('Authorization') || '';
+  if (authHeader.toLowerCase().startsWith('bearer ')) {
+    const token = authHeader.slice(7).trim();
+    try {
+      const payload = await verifyClerkToken(token, env);
+      const safeSub = payload.sub.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 56);
+      return { userId: 'clerk_' + safeSub, verified: true };
+    } catch (e) {
+      return { userId: null, verified: false, error: 'jwt: ' + e.message };
+    }
+  }
+
+  const header = request.headers.get('X-Chaptr-User') || '';
+  const queryId = (new URL(request.url)).searchParams.get('userId') || '';
+  const candidate = header || queryId;
+  if (!isValidUserId(candidate)) return { userId: null, verified: false, error: 'no auth' };
+  // Block claims to a clerk id without a verified Bearer token.
+  if (candidate.startsWith('clerk_')) {
+    return { userId: null, verified: false, error: 'clerk_ ids require Bearer token' };
+  }
+  return { userId: candidate, verified: false };
+}
+
 async function handleRecommend(request, env) {
   let body;
   try { body = await request.json(); }
@@ -111,8 +207,9 @@ async function ensureSchema(env) {
   `).run();
 }
 
-async function handleMe(request, env, userId) {
-  if (!isValidUserId(userId)) return json({ error: 'Invalid or missing user id' }, 400);
+async function handleMe(request, env) {
+  const { userId, verified, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
   await ensureSchema(env);
   const now = new Date().toISOString();
   const existing = await env.DB.prepare('SELECT id, created_at FROM users WHERE id = ?').bind(userId).first();
@@ -121,11 +218,12 @@ async function handleMe(request, env, userId) {
     return json({ id: userId, createdAt: existing.created_at, lastSeenAt: now, isNew: false });
   }
   await env.DB.prepare('INSERT INTO users (id, created_at, last_seen_at) VALUES (?, ?, ?)').bind(userId, now, now).run();
-  return json({ id: userId, createdAt: now, lastSeenAt: now, isNew: true });
+  return json({ id: userId, createdAt: now, lastSeenAt: now, isNew: true, verified });
 }
 
-async function handleLoad(request, env, userId) {
-  if (!isValidUserId(userId)) return json({ error: 'Invalid or missing user id' }, 400);
+async function handleLoad(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
   await ensureSchema(env);
   const row = await env.DB.prepare('SELECT data, version, updated_at FROM snapshots WHERE user_id = ?').bind(userId).first();
   if (!row) return json({ snapshot: null, version: 0, updatedAt: null });
@@ -134,8 +232,9 @@ async function handleLoad(request, env, userId) {
   return json({ snapshot, version: row.version, updatedAt: row.updated_at });
 }
 
-async function handleSync(request, env, userId) {
-  if (!isValidUserId(userId)) return json({ error: 'Invalid or missing user id' }, 400);
+async function handleSync(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
   let body;
   try { body = await request.json(); }
   catch { return json({ error: 'Invalid JSON' }, 400); }
@@ -176,17 +275,23 @@ export default {
 
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, ''); // strip trailing slash
-    const userId = request.headers.get('X-Chaptr-User') || url.searchParams.get('userId') || '';
 
     // Backward-compatible recommend endpoint at root.
     if ((path === '' || path === '/') && request.method === 'POST') {
       return handleRecommend(request, env);
     }
-    if (path === '/me' && request.method === 'POST') return handleMe(request, env, userId);
-    if (path === '/load' && request.method === 'GET') return handleLoad(request, env, userId);
-    if (path === '/sync' && request.method === 'POST') return handleSync(request, env, userId);
+    if (path === '/me' && request.method === 'POST') return handleMe(request, env);
+    if (path === '/load' && request.method === 'GET') return handleLoad(request, env);
+    if (path === '/sync' && request.method === 'POST') return handleSync(request, env);
 
-    if (path === '/health') return json({ ok: true, hasDb: !!env.DB });
+    if (path === '/health') {
+      return json({
+        ok: true,
+        hasDb: !!env.DB,
+        hasClerk: !!env.CLERK_FRONTEND_API,
+        clerkInstance: env.CLERK_FRONTEND_API || null,
+      });
+    }
 
     return json({ error: 'Not found', path, method: request.method }, 404);
   },

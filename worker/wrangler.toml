@@ -13,7 +13,14 @@ compatibility_date = "2024-09-23"
 # Once you've created the D1 database, uncomment the binding block below and
 # replace REPLACE_WITH_DATABASE_ID with the ID wrangler printed for you.
 
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "chaptr-db"
-# database_id = "REPLACE_WITH_DATABASE_ID"
+[vars]
+# Phase 1C — Clerk JWT verification. The Worker fetches JWKS from this domain
+# and rejects tokens issued elsewhere. Find this in your Clerk dashboard
+# (Configure → Developers → Domains → Primary domain) or decode it from your
+# publishable key. Safe to commit — it's already public via the publishable key.
+CLERK_FRONTEND_API = "oriented-slug-17.clerk.accounts.dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "chaptr-db"
+database_id = "43d3758a-f6c6-4880-9116-f05e9c6c06bd"

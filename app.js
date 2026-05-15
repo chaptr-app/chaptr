@@ -137,6 +137,19 @@ const Auth = {
       signUpForceRedirectUrl: here,
     };
   },
+  // Returns a fresh Clerk JWT for the Worker to verify. Null if not signed in
+  // or token retrieval fails. Cached briefly so we don't pound Clerk on every sync.
+  async getToken() {
+    if (!this._clerk?.session) return null;
+    try {
+      const token = await this._clerk.session.getToken();
+      return token || null;
+    } catch (e) {
+      console.warn('[Chaptr] Clerk getToken failed:', e);
+      return null;
+    }
+  },
+
   async openSignIn() {
     await this.load();
     if (this._clerk?.openSignIn) this._clerk.openSignIn(this._redirectOpts());
@@ -188,6 +201,16 @@ const Sync = {
   on(fn) { this._listeners.push(fn); return () => { this._listeners = this._listeners.filter(f => f !== fn); }; },
   _notify() { this._listeners.forEach(fn => { try { fn(this.status()); } catch {} }); },
 
+  // When signed in, send a verifiable Clerk JWT. When anonymous, send the
+  // raw device ID. The Worker enforces: clerk_* ids require a Bearer token.
+  async authHeaders() {
+    if (typeof Auth !== 'undefined' && Auth.signedIn()) {
+      const token = await Auth.getToken();
+      if (token) return { 'Authorization': 'Bearer ' + token };
+    }
+    return { 'X-Chaptr-User': getDeviceId() };
+  },
+
   buildSnapshot() {
     const snap = {};
     for (const k of this.SYNC_KEYS) {
@@ -220,12 +243,8 @@ const Sync = {
     if (this._inflight) return this._inflight;
     const body = JSON.stringify({ snapshot: this.buildSnapshot() });
     const url = this.workerUrl() + '/sync';
-    const userId = Auth.effectiveUserId();
-    this._inflight = fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Chaptr-User': userId },
-      body,
-    }).then(async (resp) => {
+    const headers = { 'Content-Type': 'application/json', ...(await this.authHeaders()) };
+    this._inflight = fetch(url, { method: 'POST', headers, body }).then(async (resp) => {
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
       this._lastVersion = data.version || 0;
@@ -244,12 +263,8 @@ const Sync = {
   async pull() {
     if (!this.enabled()) return { ok: false, error: 'No worker URL configured' };
     const url = this.workerUrl() + '/load';
-    const userId = Auth.effectiveUserId();
     try {
-      const resp = await fetch(url, {
-        method: 'GET',
-        headers: { 'X-Chaptr-User': userId },
-      });
+      const resp = await fetch(url, { method: 'GET', headers: await this.authHeaders() });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
       if (!data.snapshot) {
@@ -277,7 +292,7 @@ const Sync = {
     try {
       const resp = await fetch(this.workerUrl() + '/me', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Chaptr-User': Auth.effectiveUserId() },
+        headers: { 'Content-Type': 'application/json', ...(await this.authHeaders()) },
       });
       const data = await resp.json().catch(() => ({}));
       return resp.ok ? data : null;
