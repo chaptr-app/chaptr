@@ -66,10 +66,11 @@ const Auth = {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
           s.crossOrigin = 'anonymous';
-          // NOTE: do NOT set data-clerk-publishable-key here. With that attribute,
-          // the SDK auto-instantiates window.Clerk as an *instance*, which makes
-          // `new window.Clerk(...)` below throw "is not a constructor". Without
-          // the attribute, window.Clerk stays a class we can instantiate ourselves.
+          // Clerk v5 only exposes window.Clerk when the data attribute is set
+          // at parse time. With the attribute, the SDK auto-instantiates a
+          // singleton instance keyed with the publishable key. We just call
+          // .load() on that singleton — never `new`.
+          s.dataset.clerkPublishableKey = key;
           s.src = `https://${domain}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
           s.async = true;
           s.onload = resolve;
@@ -78,10 +79,15 @@ const Auth = {
         });
       }
 
-      // If something else already instantiated Clerk, reuse that instance.
-      this._clerk = (typeof window.Clerk === 'function')
-        ? new window.Clerk(key)
-        : window.Clerk;
+      // window.Clerk may not be defined the very instant script.onload fires —
+      // poll briefly until it appears.
+      const start = Date.now();
+      while (!window.Clerk && Date.now() - start < 5000) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+      if (!window.Clerk) throw new Error('Clerk SDK did not initialize within 5s');
+
+      this._clerk = window.Clerk;
       await this._clerk.load();
       this._user = this._clerk.user || null;
 
