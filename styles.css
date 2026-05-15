@@ -149,6 +149,26 @@ button { font: inherit; cursor: pointer; border: 0; background: none; color: inh
   .nav-links { display: none; }
 }
 
+/* ---------- SPOILER TAGS (Phase 2B) ---------- */
+.spoiler {
+  background: var(--ink);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 0 4px;
+  cursor: pointer;
+  user-select: none;
+  filter: blur(4px);
+  transition: filter .15s, color .15s;
+}
+.spoiler:hover { filter: blur(2px); }
+.spoiler.revealed {
+  background: var(--surface-2);
+  color: var(--ink);
+  filter: none;
+  cursor: text;
+  user-select: text;
+}
+
 /* ---------- SCROLLBAR (subtle) ---------- */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }

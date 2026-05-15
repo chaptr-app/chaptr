@@ -966,6 +966,81 @@ function setReview(bookId, review) {
   try { ReviewsBackend.upsert(bookId, isEmpty ? null : m[bookId]); } catch {}
 }
 
+// ---------- spoiler renderer (Phase 2B bonus) ----------
+// Turns "before ||hidden|| after" into safe HTML with click-to-reveal blurred spans.
+function renderSpoilers(text) {
+  if (!text) return '';
+  const escape = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return escape(text).replace(/\|\|([^|]+)\|\|/g, (_, inner) =>
+    `<span class="spoiler" role="button" tabindex="0" onclick="this.classList.add('revealed')">${inner}</span>`
+  );
+}
+
+// ---------- social: friend graph + activity feed (Phase 2B) ----------
+const Social = {
+  _profileCache: null,
+  _feedCache: null,
+
+  async _request(path, opts = {}) {
+    if (typeof Sync === 'undefined' || !Sync.enabled()) throw new Error('Worker URL not set');
+    const headers = { 'Content-Type': 'application/json', ...(await Sync.authHeaders()), ...(opts.headers || {}) };
+    const resp = await fetch(Sync.workerUrl() + path, { ...opts, headers });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data?.error || ('HTTP ' + resp.status));
+    return data;
+  },
+
+  async getMyProfile() {
+    if (this._profileCache) return this._profileCache;
+    try {
+      const { profile } = await this._request('/me/profile', { method: 'GET' });
+      this._profileCache = profile;
+      return profile;
+    } catch { return null; }
+  },
+  invalidateProfile() { this._profileCache = null; },
+
+  async updateMyProfile({ username, displayName, avatarHue }) {
+    const body = {};
+    if (username !== undefined) body.username = username;
+    if (displayName !== undefined) body.displayName = displayName;
+    if (avatarHue !== undefined) body.avatarHue = avatarHue;
+    const res = await this._request('/me/profile', { method: 'PUT', body: JSON.stringify(body) });
+    this.invalidateProfile();
+    return res;
+  },
+
+  async search(q) {
+    if (!q || q.trim().length < 2) return [];
+    try {
+      const { users } = await this._request('/users/search?q=' + encodeURIComponent(q.trim()), { method: 'GET' });
+      return users;
+    } catch { return []; }
+  },
+
+  async follow(username) {
+    return this._request('/follow', { method: 'POST', body: JSON.stringify({ username }) });
+  },
+  async unfollow(username) {
+    return this._request('/follow?username=' + encodeURIComponent(username), { method: 'DELETE' });
+  },
+
+  async getMyFollows() {
+    try { return await this._request('/me/follows', { method: 'GET' }); }
+    catch { return { followers: [], following: [] }; }
+  },
+
+  async getFeed() {
+    if (this._feedCache) return this._feedCache;
+    try {
+      const data = await this._request('/feed', { method: 'GET' });
+      this._feedCache = data;
+      return data;
+    } catch { return { items: [] }; }
+  },
+  invalidateFeed() { this._feedCache = null; },
+};
+
 const ReviewsBackend = {
   async upsert(bookId, review) {
     if (typeof Auth === 'undefined' || !Auth.signedIn()) return;
@@ -1004,6 +1079,21 @@ const ReviewsBackend = {
       this._statsCache[bookId] = data;
       return data;
     } catch { return null; }
+  },
+
+  // A few public reviews for a book — no auth needed.
+  _publicCache: {},
+  async publicReviews(bookId, limit = 3) {
+    const key = bookId + ':' + limit;
+    if (this._publicCache[key]) return this._publicCache[key];
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return [];
+    try {
+      const resp = await fetch(`${Sync.workerUrl()}/reviews/public?bookId=${encodeURIComponent(bookId)}&limit=${limit}`);
+      if (!resp.ok) return [];
+      const data = await resp.json();
+      this._publicCache[key] = data.reviews || [];
+      return this._publicCache[key];
+    } catch { return []; }
   },
 };
 
@@ -1399,7 +1489,7 @@ window.Chaptr = {
   addToCustomShelf, removeFromCustomShelf, customShelvesContaining,
   getCurrentBookId, setCurrentBookId,
   getBookProgress, setBookProgress,
-  getReviews, getReview, setReview, ReviewsBackend,
+  getReviews, getReview, setReview, ReviewsBackend, Social, renderSpoilers,
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
   attachSwipe, mountBottomNav, mountNowReadingPill,

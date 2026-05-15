@@ -19,7 +19,7 @@ Rules:
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-Chaptr-User, Authorization',
 };
 
@@ -201,10 +201,31 @@ async function ensureSchema(env) {
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
+      username TEXT,
+      display_name TEXT,
+      avatar_hue INTEGER,
       created_at TEXT NOT NULL,
       last_seen_at TEXT NOT NULL
     )
   `).run();
+  // Backfill columns if the users table existed before Phase 2B.
+  for (const col of [
+    ['username', 'TEXT'],
+    ['display_name', 'TEXT'],
+    ['avatar_hue', 'INTEGER'],
+  ]) {
+    try { await env.DB.prepare(`ALTER TABLE users ADD COLUMN ${col[0]} ${col[1]}`).run(); } catch {}
+  }
+  await env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL`).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS follows (
+      follower_id TEXT NOT NULL,
+      followee_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (follower_id, followee_id)
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_follows_followee ON follows(followee_id)`).run();
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS reviews (
       user_id TEXT NOT NULL,
@@ -354,6 +375,194 @@ async function handleBookStats(request, env, bookId) {
   });
 }
 
+// ---------- Profiles + follow graph (Phase 2B) ----------
+const USERNAME_RE = /^[A-Za-z0-9_-]{3,24}$/;
+
+function publicProfile(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    username: row.username || null,
+    displayName: row.display_name || null,
+    avatarHue: row.avatar_hue ?? null,
+  };
+}
+
+async function handleMyProfileGet(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  await ensureSchema(env);
+  const row = await env.DB.prepare(
+    'SELECT id, username, display_name, avatar_hue FROM users WHERE id = ?'
+  ).bind(userId).first();
+  return json({ profile: publicProfile(row || { id: userId }) });
+}
+
+async function handleMyProfilePut(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const username = body?.username == null ? null : String(body.username).trim().toLowerCase();
+  const displayName = body?.displayName == null ? null : String(body.displayName).trim().slice(0, 60);
+  const avatarHue = body?.avatarHue == null ? null : Math.max(0, Math.min(359, parseInt(body.avatarHue, 10) || 0));
+  if (username !== null && !USERNAME_RE.test(username)) {
+    return json({ error: 'Username must be 3-24 chars, letters/numbers/_-' }, 400);
+  }
+  await ensureSchema(env);
+  const now = new Date().toISOString();
+  // Ensure user row exists, then update profile fields. Unique username collision returns 409.
+  await env.DB.prepare(`
+    INSERT INTO users (id, created_at, last_seen_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET last_seen_at = excluded.last_seen_at
+  `).bind(userId, now, now).run();
+  try {
+    await env.DB.prepare(`
+      UPDATE users SET username = ?, display_name = ?, avatar_hue = ? WHERE id = ?
+    `).bind(username, displayName, avatarHue, userId).run();
+  } catch (e) {
+    const msg = String(e?.message || e);
+    if (/UNIQUE/i.test(msg) || /constraint/i.test(msg)) {
+      return json({ error: 'Username already taken' }, 409);
+    }
+    return json({ error: 'Profile update failed: ' + msg }, 500);
+  }
+  return json({ ok: true });
+}
+
+async function handleUserSearch(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  const url = new URL(request.url);
+  const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+  if (!q || q.length < 2) return json({ users: [] });
+  await ensureSchema(env);
+  const like = '%' + q.replace(/[%_]/g, '') + '%';
+  const rows = await env.DB.prepare(`
+    SELECT id, username, display_name, avatar_hue
+    FROM users
+    WHERE id != ? AND (LOWER(username) LIKE ? OR LOWER(display_name) LIKE ?)
+    ORDER BY (CASE WHEN username = ? THEN 0 ELSE 1 END), username
+    LIMIT 20
+  `).bind(userId, like, like, q).all();
+  // Also include follow state so the UI can toggle buttons immediately.
+  const followingRows = await env.DB.prepare(
+    'SELECT followee_id FROM follows WHERE follower_id = ?'
+  ).bind(userId).all();
+  const following = new Set((followingRows?.results || []).map(r => r.followee_id));
+  return json({
+    users: (rows?.results || []).map(r => ({ ...publicProfile(r), youFollow: following.has(r.id) })),
+  });
+}
+
+async function handleUserPublicProfile(request, env, username) {
+  if (!username || !USERNAME_RE.test(username)) return json({ error: 'Bad username' }, 400);
+  await ensureSchema(env);
+  const row = await env.DB.prepare(
+    'SELECT id, username, display_name, avatar_hue FROM users WHERE username = ?'
+  ).bind(username).first();
+  if (!row) return json({ error: 'Not found' }, 404);
+  const reviewsRow = await env.DB.prepare(
+    `SELECT COUNT(*) AS c FROM reviews WHERE user_id = ? AND visibility = 'public'`
+  ).bind(row.id).first();
+  return json({
+    profile: publicProfile(row),
+    publicReviewCount: reviewsRow?.c || 0,
+  });
+}
+
+async function handleFollow(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const targetUsername = (body?.username || '').trim().toLowerCase();
+  if (!USERNAME_RE.test(targetUsername)) return json({ error: 'Bad username' }, 400);
+  await ensureSchema(env);
+  const target = await env.DB.prepare(
+    'SELECT id FROM users WHERE username = ?'
+  ).bind(targetUsername).first();
+  if (!target) return json({ error: 'User not found' }, 404);
+  if (target.id === userId) return json({ error: 'Cannot follow yourself' }, 400);
+  const now = new Date().toISOString();
+  await env.DB.prepare(`
+    INSERT INTO follows (follower_id, followee_id, created_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(follower_id, followee_id) DO NOTHING
+  `).bind(userId, target.id, now).run();
+  return json({ ok: true, followee: targetUsername });
+}
+
+async function handleUnfollow(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  const url = new URL(request.url);
+  const targetUsername = (url.searchParams.get('username') || '').trim().toLowerCase();
+  if (!USERNAME_RE.test(targetUsername)) return json({ error: 'Bad username' }, 400);
+  await ensureSchema(env);
+  const target = await env.DB.prepare(
+    'SELECT id FROM users WHERE username = ?'
+  ).bind(targetUsername).first();
+  if (!target) return json({ ok: true }); // idempotent
+  await env.DB.prepare(
+    'DELETE FROM follows WHERE follower_id = ? AND followee_id = ?'
+  ).bind(userId, target.id).run();
+  return json({ ok: true });
+}
+
+async function handleMyFollows(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  await ensureSchema(env);
+  const following = await env.DB.prepare(`
+    SELECT u.id, u.username, u.display_name, u.avatar_hue
+    FROM follows f
+    JOIN users u ON u.id = f.followee_id
+    WHERE f.follower_id = ?
+    ORDER BY f.created_at DESC
+  `).bind(userId).all();
+  const followers = await env.DB.prepare(`
+    SELECT u.id, u.username, u.display_name, u.avatar_hue
+    FROM follows f
+    JOIN users u ON u.id = f.follower_id
+    WHERE f.followee_id = ?
+    ORDER BY f.created_at DESC
+  `).bind(userId).all();
+  return json({
+    following: (following?.results || []).map(publicProfile),
+    followers: (followers?.results || []).map(publicProfile),
+  });
+}
+
+async function handleFeed(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  await ensureSchema(env);
+  const rows = await env.DB.prepare(`
+    SELECT r.user_id, r.book_id, r.rating, r.text, r.visibility, r.updated_at,
+           u.username, u.display_name, u.avatar_hue
+    FROM reviews r
+    JOIN follows f ON f.followee_id = r.user_id
+    JOIN users u ON u.id = r.user_id
+    WHERE f.follower_id = ?
+      AND r.visibility IN ('public', 'friends')
+    ORDER BY r.updated_at DESC
+    LIMIT 30
+  `).bind(userId).all();
+  return json({
+    items: (rows?.results || []).map(r => ({
+      verb: 'reviewed',
+      user: publicProfile(r),
+      bookId: r.book_id,
+      rating: r.rating,
+      text: r.text,
+      visibility: r.visibility,
+      updatedAt: r.updated_at,
+    })),
+  });
+}
+
 // Recent public reviews — anonymous, no auth required. Useful for a community feed later.
 async function handleReviewsPublic(request, env) {
   const url = new URL(request.url);
@@ -397,6 +606,17 @@ export default {
     // /books/<id>/stats
     const bookStatsMatch = path.match(/^\/books\/([^/]+)\/stats$/);
     if (bookStatsMatch && request.method === 'GET') return handleBookStats(request, env, decodeURIComponent(bookStatsMatch[1]));
+
+    // Profiles + follow graph (Phase 2B)
+    if (path === '/me/profile' && request.method === 'GET') return handleMyProfileGet(request, env);
+    if (path === '/me/profile' && request.method === 'PUT') return handleMyProfilePut(request, env);
+    if (path === '/me/follows' && request.method === 'GET') return handleMyFollows(request, env);
+    if (path === '/users/search' && request.method === 'GET') return handleUserSearch(request, env);
+    if (path === '/follow' && request.method === 'POST') return handleFollow(request, env);
+    if (path === '/follow' && request.method === 'DELETE') return handleUnfollow(request, env);
+    if (path === '/feed' && request.method === 'GET') return handleFeed(request, env);
+    const userProfileMatch = path.match(/^\/users\/([^/]+)$/);
+    if (userProfileMatch && request.method === 'GET') return handleUserPublicProfile(request, env, decodeURIComponent(userProfileMatch[1]).toLowerCase());
 
     if (path === '/health') {
       return json({

@@ -3,9 +3,24 @@
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
+  username TEXT,
+  display_name TEXT,
+  avatar_hue INTEGER,
   created_at TEXT NOT NULL,
   last_seen_at TEXT NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
+
+-- Phase 2B — directed follow graph. (follower_id) follows (followee_id).
+CREATE TABLE IF NOT EXISTS follows (
+  follower_id TEXT NOT NULL,
+  followee_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (follower_id, followee_id),
+  FOREIGN KEY (follower_id) REFERENCES users(id),
+  FOREIGN KEY (followee_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_follows_followee ON follows(followee_id);
 
 CREATE TABLE IF NOT EXISTS snapshots (
   user_id TEXT PRIMARY KEY,

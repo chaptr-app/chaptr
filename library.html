@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=4">
 <style>
   .lib-hero { margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: stretch; }
   @media (max-width: 880px) { .lib-hero { grid-template-columns: 1fr; } }
@@ -243,12 +243,13 @@
   </div>
 </footer>
 
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
           getReviews, FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
           listCustomShelves, getAISettings, ReviewsBackend,
+          Social, Auth, renderSpoilers,
           Store, K, OL } = window.Chaptr;
 
   // Quietly hide AI surfaces the user has switched off in Profile.
@@ -324,6 +325,7 @@
           <div class="title">${b.title}</div>
           <div class="author">${b.author} · ${b.genre} · ${b.pages}p</div>
           <div class="community" data-com-idx="${i}" style="font-size:.78rem; color:var(--ink-3); margin-top:4px; min-height:1.1em;"></div>
+          <div class="public-snippet" data-snippet-idx="${i}" style="display:none; font-size:.8rem; color:var(--ink-2); font-style:italic; margin-top:6px; padding-top:6px; border-top:1px dashed var(--border);"></div>
         </div>
         <div class="why"><span class="label">Why this?</span> ${rec.why}</div>
       </div>`;
@@ -332,15 +334,24 @@
       const node = el.querySelector(`[data-cover-idx="${i}"]`);
       OL.applyCover(node, findBook(rec.bookId), 'M');
     });
-    // Community ratings — lazy load. Skipped silently if no Worker URL configured.
+    // Community ratings + a public review snippet — lazy loaded. Silently skipped if no Worker URL.
     recs.forEach(async (rec, i) => {
       try {
         const stats = await ReviewsBackend.stats(rec.bookId);
-        if (!stats || !stats.count) return;
-        const node = el.querySelector(`[data-com-idx="${i}"]`);
-        if (node) {
-          const stars = '★'.repeat(Math.round(stats.avgRating));
-          node.innerHTML = `<span style="color:var(--accent);">${stars}</span> ${stats.avgRating} · ${stats.count} reader${stats.count === 1 ? '' : 's'}`;
+        if (stats && stats.count) {
+          const node = el.querySelector(`[data-com-idx="${i}"]`);
+          if (node) {
+            const stars = '★'.repeat(Math.round(stats.avgRating || 0));
+            node.innerHTML = `<span style="color:var(--accent);">${stars}</span> ${stats.avgRating} · ${stats.count} reader${stats.count === 1 ? '' : 's'}`;
+          }
+          const snippets = await ReviewsBackend.publicReviews(rec.bookId, 1);
+          if (snippets.length && snippets[0].text) {
+            const snipNode = el.querySelector(`[data-snippet-idx="${i}"]`);
+            if (snipNode) {
+              snipNode.style.display = '';
+              snipNode.innerHTML = `"${renderSpoilers(snippets[0].text.slice(0, 160))}"`;
+            }
+          }
         }
       } catch {}
     });
@@ -575,21 +586,47 @@
   });
 
   // ---------- friend feed ----------
-  function renderFeed() {
+  async function renderFeed() {
     const el = document.getElementById('friendFeed');
-    // Start with mock friend activity, then mix in your own reviews at the top
+    // Build the "Your reviews" rows first — works regardless of auth state.
     const myReviews = Object.entries(getReviews())
       .filter(([, r]) => r && (r.rating || r.text))
       .map(([bookId, r]) => {
         const hoursAgo = Math.max(0, (Date.now() - new Date(r.date).getTime()) / 3600000);
         return { friend: 'You', verb: 'reviewed', bookId, rating: r.rating, note: r.text, hoursAgo, isYou: true };
       });
-    const items = [...myReviews, ...FRIEND_ACTIVITY].sort((a, b) => a.hoursAgo - b.hoursAgo).slice(0, 8);
+
+    // Try the real /feed when signed in. Anything from there outranks the mock activity.
+    let realActivity = [];
+    if (Auth.signedIn() && Sync.enabled()) {
+      try {
+        const data = await Social.getFeed();
+        realActivity = (data.items || []).map(it => ({
+          friend: it.user?.displayName || it.user?.username || 'Reader',
+          username: it.user?.username,
+          verb: it.verb,
+          bookId: it.bookId,
+          rating: it.rating,
+          note: it.text,
+          hoursAgo: Math.max(0, (Date.now() - new Date(it.updatedAt).getTime()) / 3600000),
+          hue: it.user?.avatarHue ?? 160,
+          isReal: true,
+        }));
+      } catch {}
+    }
+
+    const items = realActivity.length > 0
+      ? [...myReviews, ...realActivity].sort((a, b) => a.hoursAgo - b.hoursAgo).slice(0, 12)
+      : [...myReviews, ...FRIEND_ACTIVITY].sort((a, b) => a.hoursAgo - b.hoursAgo).slice(0, 8);
 
     el.innerHTML = items.map((it, i) => {
       const b = findBook(it.bookId);
-      const f = it.isYou ? { name: 'You', initials: 'Y', hue: 160 } : friendByName(it.friend);
+      let f;
+      if (it.isYou) f = { name: 'You', initials: 'Y', hue: 160 };
+      else if (it.isReal) f = { name: it.friend, initials: (it.friend[0] || 'R').toUpperCase(), hue: it.hue ?? 160 };
+      else f = friendByName(it.friend);
       const avatarBg = `linear-gradient(135deg, hsl(${f.hue},45%,40%), hsl(${(f.hue+40)%360},55%,55%))`;
+      const noteHtml = it.note ? `<div class="note">"${renderSpoilers(it.note)}"</div>` : '';
       return `<div class="feed-item ${it.isYou ? 'you' : ''}">
         <div class="avatar-sm" style="background:${avatarBg};">${f.initials}</div>
         <div class="feed-cover" data-feed-cover="${i}"></div>
@@ -598,7 +635,7 @@
           <span class="verb">${it.verb}</span>
           <span class="what">${b.title}</span>
           ${it.rating ? `<span class="stars">${starString(it.rating)}</span>` : ''}
-          ${it.note ? `<div class="note">"${it.note}"</div>` : ''}
+          ${noteHtml}
         </div>
         <div class="when">${relativeTime(it.hoursAgo)}</div>
       </div>`;

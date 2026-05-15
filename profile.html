@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=3">
+<link rel="stylesheet" href="styles.css?v=4">
 <style>
   .profile-head { display: grid; grid-template-columns: 96px 1fr auto; gap: 20px; align-items: center; margin-top: 32px; }
   @media (max-width: 720px) { .profile-head { grid-template-columns: 64px 1fr; } .profile-head .actions { grid-column: 1 / -1; } }
@@ -273,6 +273,25 @@
           </div>
           <button class="btn btn-outline btn-sm" id="authSignOutBtn">Sign out</button>
         </div>
+        <div style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--border);">
+          <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+            <div style="flex:1; min-width:220px;">
+              <label style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600;">Username</label>
+              <div style="display:flex; gap:6px; margin-top:6px;">
+                <span style="display:inline-flex; align-items:center; color:var(--ink-3); font-family:monospace;">@</span>
+                <input type="text" id="usernameInput" placeholder="your_handle"
+                  style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; font-family:monospace; background:var(--bg); color:var(--ink);">
+                <button class="btn btn-primary btn-sm" id="saveUsernameBtn">Save</button>
+              </div>
+              <div class="muted" id="usernameHint" style="font-size:.78rem; margin-top:6px;">3–24 chars, letters/numbers/_- only. Friends find you with this.</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:18px; align-items:center; margin-top:14px;">
+            <div><span style="font-family:var(--serif); font-size:1.4rem;" id="followerCount">0</span> <span class="muted" style="font-size:.85rem;">followers</span></div>
+            <div><span style="font-family:var(--serif); font-size:1.4rem;" id="followingCount">0</span> <span class="muted" style="font-size:.85rem;">following</span></div>
+            <button class="btn btn-outline btn-sm" id="findFriendsBtn" style="margin-left:auto;">Find friends</button>
+          </div>
+        </div>
       </div>
       <div id="accountUnconfigured" style="display:none;">
         <p class="muted" style="margin:0 0 8px;">Paste your Clerk publishable key to enable accounts:</p>
@@ -381,6 +400,19 @@
 
 </main>
 
+<div id="friendsDlg" style="display:none; position:fixed; inset:0; background:rgba(20,20,30,.45); z-index:200; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:var(--surface); border-radius:var(--r-lg); padding:24px; max-width:480px; width:100%; box-shadow:var(--shadow-lg); max-height:80vh; overflow-y:auto;">
+    <div class="eyebrow">Find friends</div>
+    <h3 style="margin:4px 0 12px;">Search by username or name</h3>
+    <input type="text" id="friendsSearchInput" placeholder="bob, sarah, etc."
+      style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink);">
+    <div id="friendsResults" style="margin-top:14px; display:flex; flex-direction:column; gap:8px; min-height:60px;"></div>
+    <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+      <button class="btn btn-ghost btn-sm" id="closeFriendsDlg">Close</button>
+    </div>
+  </div>
+</div>
+
 <footer class="footer">
   <div class="container row">
     <span>© Chaptr — a prototype.</span>
@@ -388,14 +420,14 @@
   </div>
 </footer>
 
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
           getYearChallenge, setYearChallenge, getYearChallengeProgress,
           getAISettings, setAISetting, exportReaderProfile, wipeReaderProfile,
           getGoalType, setGoalType, getDailyGoalPages, setDailyGoalPages,
-          Sync, Auth, getDeviceId,
+          Sync, Auth, Social, getDeviceId,
           Store, K } = window.Chaptr;
 
   const LEVEL_COLORS = ['#F4EFE6', 'hsl(150,30%,80%)', 'hsl(150,32%,60%)', 'hsl(150,38%,45%)', '#2D4A3E'];
@@ -575,7 +607,18 @@
       if (avatarEl && avatarEl.id !== 'authAvatar') avatarEl.textContent = initials(name, email).slice(0, 1);
       const readerName = document.getElementById('readerName');
       if (readerName) readerName.textContent = name || email.split('@')[0] || 'Reader';
+      // Phase 2B: hydrate the social fields once we know we're signed in.
+      renderSocial();
     }
+  }
+
+  async function renderSocial() {
+    if (!Auth.signedIn() || !Sync.enabled()) return;
+    const profile = await Social.getMyProfile();
+    document.getElementById('usernameInput').value = profile?.username || '';
+    const follows = await Social.getMyFollows();
+    document.getElementById('followerCount').textContent = follows.followers?.length || 0;
+    document.getElementById('followingCount').textContent = follows.following?.length || 0;
   }
   function wireAuth() {
     document.getElementById('saveClerkKeyBtn').addEventListener('click', () => {
@@ -610,6 +653,81 @@
       renderSyncStatus();
     });
     Auth.on(() => { renderAuth(); renderSyncStatus(); });
+
+    // Phase 2B — username save
+    document.getElementById('saveUsernameBtn').addEventListener('click', async () => {
+      const input = document.getElementById('usernameInput');
+      const hint = document.getElementById('usernameHint');
+      const v = input.value.trim().toLowerCase();
+      hint.style.color = '';
+      if (!/^[A-Za-z0-9_-]{3,24}$/.test(v)) {
+        hint.style.color = 'var(--danger)';
+        hint.textContent = '3–24 chars, letters / numbers / _ -';
+        return;
+      }
+      try {
+        await Social.updateMyProfile({ username: v });
+        hint.style.color = 'var(--success)';
+        hint.textContent = `✓ Saved. Friends can find you as @${v}.`;
+      } catch (e) {
+        hint.style.color = 'var(--danger)';
+        hint.textContent = e.message;
+      }
+    });
+
+    // Phase 2B — Find friends modal
+    const dlg = document.getElementById('friendsDlg');
+    function openFriendsDlg() {
+      dlg.style.display = 'flex';
+      document.getElementById('friendsSearchInput').value = '';
+      document.getElementById('friendsResults').innerHTML =
+        '<div class="muted" style="font-size:.88rem; text-align:center;">Type a username or name to search.</div>';
+      setTimeout(() => document.getElementById('friendsSearchInput').focus(), 50);
+    }
+    function closeFriendsDlg() { dlg.style.display = 'none'; renderSocial(); }
+    document.getElementById('findFriendsBtn').addEventListener('click', openFriendsDlg);
+    document.getElementById('closeFriendsDlg').addEventListener('click', closeFriendsDlg);
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) closeFriendsDlg(); });
+
+    let searchTimer = null;
+    document.getElementById('friendsSearchInput').addEventListener('input', (e) => {
+      clearTimeout(searchTimer);
+      const q = e.target.value;
+      searchTimer = setTimeout(async () => {
+        const results = await Social.search(q);
+        const out = document.getElementById('friendsResults');
+        if (!results.length) {
+          out.innerHTML = '<div class="muted" style="font-size:.88rem; text-align:center;">No matches.</div>';
+          return;
+        }
+        out.innerHTML = results.map((u, i) => {
+          const name = u.displayName || u.username || 'Reader';
+          const hue = u.avatarHue ?? 160;
+          const init = (name[0] || 'R').toUpperCase();
+          return `<div style="display:flex; align-items:center; gap:12px; padding:10px; border:1px solid var(--border); border-radius:var(--r-sm);">
+            <div class="avatar" style="width:36px; height:36px; font-size:.9rem; background:linear-gradient(135deg, hsl(${hue},45%,40%), hsl(${(hue+40)%360},55%,55%));">${init}</div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:600;">${name}</div>
+              <div class="muted" style="font-size:.78rem;">@${u.username || '—'}</div>
+            </div>
+            <button class="btn btn-${u.youFollow ? 'outline' : 'primary'} btn-sm" data-follow="${u.username}" data-following="${u.youFollow ? '1' : '0'}">${u.youFollow ? 'Following' : 'Follow'}</button>
+          </div>`;
+        }).join('');
+        out.querySelectorAll('[data-follow]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const username = btn.dataset.follow;
+            const isFollowing = btn.dataset.following === '1';
+            btn.disabled = true;
+            try {
+              if (isFollowing) { await Social.unfollow(username); btn.dataset.following = '0'; btn.className = 'btn btn-primary btn-sm'; btn.textContent = 'Follow'; }
+              else { await Social.follow(username); btn.dataset.following = '1'; btn.className = 'btn btn-outline btn-sm'; btn.textContent = 'Following'; }
+              Social.invalidateFeed();
+            } catch (e) { btn.textContent = 'Error: ' + e.message; }
+            finally { btn.disabled = false; }
+          });
+        });
+      }, 250);
+    });
   }
 
   // --- cloud sync (V2 Phase 1A) ---
