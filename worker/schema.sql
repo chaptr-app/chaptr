@@ -74,3 +74,26 @@ CREATE TABLE IF NOT EXISTS custom_shelves (
   FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 CREATE INDEX IF NOT EXISTS idx_shelves_owner_vis ON custom_shelves(owner_id, visibility);
+
+-- Phase 4 — reading buddies. Two-person pair reads with a shared message thread.
+CREATE TABLE IF NOT EXISTS pair_reads (
+  id TEXT PRIMARY KEY,
+  book_id TEXT NOT NULL,
+  inviter_id TEXT NOT NULL,
+  invitee_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pair_inviter ON pair_reads(inviter_id, status);
+CREATE INDEX IF NOT EXISTS idx_pair_invitee ON pair_reads(invitee_id, status);
+
+CREATE TABLE IF NOT EXISTS pair_read_messages (
+  id TEXT PRIMARY KEY,
+  pair_read_id TEXT NOT NULL,
+  sender_id TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (pair_read_id) REFERENCES pair_reads(id)
+);
+CREATE INDEX IF NOT EXISTS idx_pr_messages_pair ON pair_read_messages(pair_read_id, created_at);

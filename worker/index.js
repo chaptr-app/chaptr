@@ -261,6 +261,29 @@ async function ensureSchema(env) {
     )
   `).run();
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_shelves_owner_vis ON custom_shelves(owner_id, visibility)`).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS pair_reads (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL,
+      inviter_id TEXT NOT NULL,
+      invitee_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_pair_inviter ON pair_reads(inviter_id, status)`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_pair_invitee ON pair_reads(invitee_id, status)`).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS pair_read_messages (
+      id TEXT PRIMARY KEY,
+      pair_read_id TEXT NOT NULL,
+      sender_id TEXT NOT NULL,
+      text TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_pr_messages_pair ON pair_read_messages(pair_read_id, created_at)`).run();
 }
 
 // Helper: is requester (or anonymous) allowed to view a row with this visibility owned by ownerId?
@@ -788,6 +811,148 @@ async function handleReviewsPublic(request, env) {
   return json({ reviews: rows?.results || [] });
 }
 
+// ---------- Reading buddies (Phase 4) ----------
+const PAIR_ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
+
+function genId(prefix) {
+  return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+async function handlePairInvite(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { username, bookId } = body || {};
+  if (!username || !USERNAME_RE.test(String(username).toLowerCase())) return json({ error: 'Bad username' }, 400);
+  if (!bookId || typeof bookId !== 'string' || bookId.length > 128) return json({ error: 'Missing bookId' }, 400);
+  await ensureSchema(env);
+  const target = await env.DB.prepare(
+    'SELECT id FROM users WHERE username = ?'
+  ).bind(String(username).toLowerCase()).first();
+  if (!target) return json({ error: 'User not found' }, 404);
+  if (target.id === userId) return json({ error: 'Cannot pair-read with yourself' }, 400);
+
+  // Don't allow duplicate pending/active rows for the same pair+book in either direction.
+  const dup = await env.DB.prepare(`
+    SELECT id, status FROM pair_reads
+    WHERE book_id = ?
+      AND status IN ('pending', 'active')
+      AND ((inviter_id = ? AND invitee_id = ?) OR (inviter_id = ? AND invitee_id = ?))
+    LIMIT 1
+  `).bind(bookId, userId, target.id, target.id, userId).first();
+  if (dup) return json({ error: 'Already paired on this book', existingId: dup.id, status: dup.status }, 409);
+
+  const id = genId('pr');
+  const now = new Date().toISOString();
+  await env.DB.prepare(`
+    INSERT INTO pair_reads (id, book_id, inviter_id, invitee_id, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'pending', ?, ?)
+  `).bind(id, bookId, userId, target.id, now, now).run();
+  return json({ ok: true, id });
+}
+
+async function handlePairList(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  await ensureSchema(env);
+  const rows = await env.DB.prepare(`
+    SELECT pr.id, pr.book_id, pr.inviter_id, pr.invitee_id, pr.status, pr.created_at, pr.updated_at,
+           inv.username AS inv_username, inv.display_name AS inv_display, inv.avatar_hue AS inv_hue,
+           tee.username AS tee_username, tee.display_name AS tee_display, tee.avatar_hue AS tee_hue
+    FROM pair_reads pr
+    JOIN users inv ON inv.id = pr.inviter_id
+    JOIN users tee ON tee.id = pr.invitee_id
+    WHERE pr.inviter_id = ? OR pr.invitee_id = ?
+    ORDER BY pr.updated_at DESC
+  `).bind(userId, userId).all();
+  const items = (rows?.results || []).map(r => {
+    const youAreInviter = r.inviter_id === userId;
+    const partner = youAreInviter
+      ? { id: r.invitee_id, username: r.tee_username, displayName: r.tee_display, avatarHue: r.tee_hue }
+      : { id: r.inviter_id, username: r.inv_username, displayName: r.inv_display, avatarHue: r.inv_hue };
+    return {
+      id: r.id,
+      bookId: r.book_id,
+      status: r.status,
+      youAreInviter,
+      partner,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    };
+  });
+  return json({ items });
+}
+
+async function _verifyParticipant(env, userId, pairId) {
+  const row = await env.DB.prepare(
+    'SELECT id, inviter_id, invitee_id, status, book_id FROM pair_reads WHERE id = ?'
+  ).bind(pairId).first();
+  if (!row) return { err: json({ error: 'Pair read not found' }, 404) };
+  if (row.inviter_id !== userId && row.invitee_id !== userId) return { err: json({ error: 'Not a participant' }, 403) };
+  return { row };
+}
+
+async function handlePairTransition(request, env, pairId, newStatus, requireInvitee) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!PAIR_ID_RE.test(pairId)) return json({ error: 'Bad pair id' }, 400);
+  await ensureSchema(env);
+  const { row, err } = await _verifyParticipant(env, userId, pairId);
+  if (err) return err;
+  if (requireInvitee && row.invitee_id !== userId) return json({ error: 'Only the invitee can do that' }, 403);
+  const now = new Date().toISOString();
+  await env.DB.prepare('UPDATE pair_reads SET status = ?, updated_at = ? WHERE id = ?').bind(newStatus, now, pairId).run();
+  return json({ ok: true, status: newStatus });
+}
+
+async function handlePairGet(request, env, pairId) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!PAIR_ID_RE.test(pairId)) return json({ error: 'Bad pair id' }, 400);
+  await ensureSchema(env);
+  const { row, err } = await _verifyParticipant(env, userId, pairId);
+  if (err) return err;
+  const msgs = await env.DB.prepare(`
+    SELECT id, sender_id, text, created_at
+    FROM pair_read_messages
+    WHERE pair_read_id = ?
+    ORDER BY created_at ASC
+    LIMIT 500
+  `).bind(pairId).all();
+  return json({
+    pairRead: {
+      id: row.id, bookId: row.book_id, status: row.status,
+      inviterId: row.inviter_id, inviteeId: row.invitee_id,
+    },
+    messages: (msgs?.results || []).map(m => ({
+      id: m.id, senderId: m.sender_id, text: m.text, createdAt: m.created_at,
+      mine: m.sender_id === userId,
+    })),
+  });
+}
+
+async function handlePairSendMessage(request, env, pairId) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!PAIR_ID_RE.test(pairId)) return json({ error: 'Bad pair id' }, 400);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const text = String(body?.text || '').trim().slice(0, 2000);
+  if (!text) return json({ error: 'Empty message' }, 400);
+  await ensureSchema(env);
+  const { row, err } = await _verifyParticipant(env, userId, pairId);
+  if (err) return err;
+  if (row.status !== 'active') return json({ error: 'Pair read is not active' }, 400);
+  const id = genId('m');
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    'INSERT INTO pair_read_messages (id, pair_read_id, sender_id, text, created_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(id, pairId, userId, text, now).run();
+  await env.DB.prepare('UPDATE pair_reads SET updated_at = ? WHERE id = ?').bind(now, pairId).run();
+  return json({ ok: true, id, createdAt: now });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
@@ -834,6 +999,20 @@ export default {
     // Shelves (Phase 3E)
     if (path === '/shelves' && request.method === 'POST') return handleShelfUpsert(request, env);
     if (path === '/shelves' && request.method === 'DELETE') return handleShelfDelete(request, env);
+
+    // Reading buddies (Phase 4)
+    if (path === '/pair-reads' && request.method === 'POST') return handlePairInvite(request, env);
+    if (path === '/pair-reads' && request.method === 'GET') return handlePairList(request, env);
+    const prGetMatch = path.match(/^\/pair-reads\/([^/]+)$/);
+    if (prGetMatch && request.method === 'GET') return handlePairGet(request, env, prGetMatch[1]);
+    const prAcceptMatch = path.match(/^\/pair-reads\/([^/]+)\/accept$/);
+    if (prAcceptMatch && request.method === 'POST') return handlePairTransition(request, env, prAcceptMatch[1], 'active', true);
+    const prDeclineMatch = path.match(/^\/pair-reads\/([^/]+)\/decline$/);
+    if (prDeclineMatch && request.method === 'POST') return handlePairTransition(request, env, prDeclineMatch[1], 'declined', true);
+    const prEndMatch = path.match(/^\/pair-reads\/([^/]+)\/end$/);
+    if (prEndMatch && request.method === 'POST') return handlePairTransition(request, env, prEndMatch[1], 'ended', false);
+    const prMsgMatch = path.match(/^\/pair-reads\/([^/]+)\/messages$/);
+    if (prMsgMatch && request.method === 'POST') return handlePairSendMessage(request, env, prMsgMatch[1]);
 
     if (path === '/health') {
       return json({

@@ -970,6 +970,35 @@ function setReview(bookId, review) {
   try { ReviewsBackend.upsert(bookId, isEmpty ? null : m[bookId]); } catch {}
 }
 
+// ---------- Reading buddies (Phase 4) ----------
+const PairReads = {
+  async _request(path, opts = {}) {
+    if (typeof Sync === 'undefined' || !Sync.enabled()) throw new Error('Worker URL not set');
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) throw new Error('Sign in to use pair reads');
+    const headers = { 'Content-Type': 'application/json', ...(await Sync.authHeaders()), ...(opts.headers || {}) };
+    const resp = await fetch(Sync.workerUrl() + path, { ...opts, headers });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data?.error || ('HTTP ' + resp.status));
+    return data;
+  },
+  async invite(username, bookId) {
+    return this._request('/pair-reads', { method: 'POST', body: JSON.stringify({ username, bookId }) });
+  },
+  async list() {
+    try { return await this._request('/pair-reads', { method: 'GET' }); }
+    catch { return { items: [] }; }
+  },
+  async accept(id) { return this._request(`/pair-reads/${encodeURIComponent(id)}/accept`, { method: 'POST' }); },
+  async decline(id) { return this._request(`/pair-reads/${encodeURIComponent(id)}/decline`, { method: 'POST' }); },
+  async end(id) { return this._request(`/pair-reads/${encodeURIComponent(id)}/end`, { method: 'POST' }); },
+  async get(id) { return this._request(`/pair-reads/${encodeURIComponent(id)}`, { method: 'GET' }); },
+  async sendMessage(id, text) {
+    return this._request(`/pair-reads/${encodeURIComponent(id)}/messages`, {
+      method: 'POST', body: JSON.stringify({ text }),
+    });
+  },
+};
+
 // ---------- Stats: finish tracking + trending (Phase 3A + 3D) ----------
 const Stats = {
   // Total minutes the user has spent on a book according to their session history.
@@ -1631,7 +1660,7 @@ window.Chaptr = {
   ShelvesBackend,
   getCurrentBookId, setCurrentBookId,
   getBookProgress, setBookProgress,
-  getReviews, getReview, setReview, ReviewsBackend, Social, Stats, renderSpoilers,
+  getReviews, getReview, setReview, ReviewsBackend, Social, Stats, PairReads, renderSpoilers,
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
   attachSwipe, mountBottomNav, mountNowReadingPill,

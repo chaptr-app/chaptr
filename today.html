@@ -182,6 +182,65 @@
     color: var(--accent); border-radius: 999px; font-weight: 600; margin-top: 4px;
   }
 
+  /* ---------- reading buddies (Phase 4) ---------- */
+  .pr-card { padding: 18px 20px; }
+  .pr-card h3 { margin: 0 0 12px; }
+  .pr-row {
+    display: grid; grid-template-columns: 40px 36px 1fr auto; gap: 12px; align-items: center;
+    padding: 12px; border: 1px solid var(--border); border-radius: var(--r-md);
+    margin-bottom: 8px;
+    background: var(--surface);
+  }
+  .pr-row .pr-avatar {
+    width: 40px; height: 40px; border-radius: 999px;
+    display: grid; place-items: center; color: #FFF; font-family: var(--serif); font-weight: 600;
+  }
+  .pr-row .pr-cover {
+    width: 36px; height: 52px; border-radius: 4px; box-shadow: var(--shadow-sm);
+    background-size: cover !important; background-position: center !important;
+  }
+  .pr-row .pr-meta .who { font-weight: 600; }
+  .pr-row .pr-meta .ctx { color: var(--ink-3); font-size: .82rem; }
+  .pr-row .pr-actions { display: flex; gap: 6px; }
+  .pr-chat {
+    display: none;
+    grid-column: 1 / -1;
+    margin-top: 10px; padding: 12px;
+    background: var(--bg);
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border);
+  }
+  .pr-row.expanded .pr-chat { display: block; }
+  .pr-messages {
+    max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+    margin-bottom: 10px;
+  }
+  .pr-message {
+    padding: 8px 10px; border-radius: 10px; max-width: 80%; font-size: .9rem; line-height: 1.35;
+    background: var(--surface-2); align-self: flex-start;
+  }
+  .pr-message.mine { background: var(--primary); color: #FFF; align-self: flex-end; }
+  .pr-message .ts { font-size: .68rem; color: var(--ink-3); margin-top: 2px; display: block; }
+  .pr-message.mine .ts { color: rgba(255,255,255,.7); }
+  .pr-compose { display: flex; gap: 6px; }
+  .pr-compose input {
+    flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--r-sm);
+    font: inherit; background: var(--surface); color: var(--ink);
+  }
+  .pr-empty { color: var(--ink-3); font-size: .85rem; padding: 14px; text-align: center;
+    border: 1px dashed var(--border); border-radius: var(--r-sm); }
+  .pr-badge {
+    font-size: .68rem; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3);
+    padding: 2px 8px; border-radius: 999px; background: var(--surface-2);
+  }
+  .pr-badge.pending { background: var(--accent-tint); color: var(--accent); }
+  .pr-badge.active { background: var(--primary-tint); color: var(--primary); }
+
+  /* invite modal */
+  .invite-dlg-back { position: fixed; inset: 0; background: rgba(20,20,30,.45); display: none; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
+  .invite-dlg-back.open { display: flex; }
+  .invite-dlg-card { background: var(--surface); border-radius: var(--r-lg); padding: 24px; max-width: 480px; width: 100%; box-shadow: var(--shadow-lg); max-height: 80vh; overflow-y: auto; }
+
   /* heartbeat dot — proves the timer interval is alive */
   .heartbeat {
     display: inline-block; width: 8px; height: 8px; border-radius: 999px;
@@ -328,6 +387,12 @@
         <div class="book-picker" id="bookPicker"></div>
       </div>
 
+      <div class="card pr-card" id="pairReadCard" style="margin-top:18px; display:none;">
+        <div class="eyebrow">Reading together</div>
+        <h3>You + a friend.</h3>
+        <div id="pairReadList"></div>
+      </div>
+
       <div class="card history" style="margin-top:18px;">
         <div class="row between" style="align-items:center; margin-bottom:6px;">
           <div>
@@ -361,6 +426,7 @@
         <div class="resume-row">
           <button class="btn btn-primary" id="btnResumeReading" style="width:100%;">Resume reading</button>
         </div>
+        <button class="btn btn-outline btn-sm" id="readWithFriendBtn" style="margin-top:10px; width:100%; display:none;">+ Read with a friend</button>
       </div>
 
       <div class="card coach" style="margin-top:18px;">
@@ -381,6 +447,22 @@
   </div>
 
 </main>
+
+<div class="invite-dlg-back" id="inviteDlg">
+  <div class="invite-dlg-card" role="dialog" aria-modal="true">
+    <div class="eyebrow">Pair-read invite</div>
+    <h3 style="margin:4px 0 4px;" id="inviteBookTitle">Book</h3>
+    <div class="muted" id="inviteBookAuthor" style="font-size:.85rem; margin-bottom:12px;"></div>
+    <label style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600;">Who to invite</label>
+    <input type="text" id="inviteSearchInput" placeholder="Search by username or name"
+      style="width:100%; margin-top:6px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink);">
+    <div id="inviteSearchResults" style="margin-top:12px; display:flex; flex-direction:column; gap:8px; min-height:40px;"></div>
+    <div id="inviteError" style="display:none; margin-top:10px; padding:10px 12px; background:#FEF2F2; color:var(--danger); border-radius:var(--r-sm); font-size:.85rem;"></div>
+    <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+      <button class="btn btn-ghost btn-sm" id="closeInviteDlg">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <footer class="footer">
   <div class="container row">
@@ -418,7 +500,7 @@
   </div>
 </div>
 
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -437,6 +519,7 @@
           getShelves, getCustomBooks,
           getBookWpm, getGoalType, getDailyGoalPages, getTodayPages,
           getAISettings, askCoachMore,
+          PairReads, Social, Auth, Sync, hashHue,
           fmtTime, fmtDay, Store, K, OL } = window.Chaptr;
 
   function fmtDuration(mins) {
@@ -897,6 +980,193 @@
     }).join('');
   }
 
+  // ---------- reading buddies (Phase 4) ----------
+  const inviteDlg = document.getElementById('inviteDlg');
+  let inviteForBookId = null;
+
+  function initialsOf(p) {
+    const src = (p.displayName || p.username || 'R').trim();
+    const parts = src.split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return src.slice(0, 2).toUpperCase();
+  }
+  function pairAvatarBg(p) {
+    const hue = p.avatarHue ?? hashHue(p.username || p.displayName || 'reader');
+    return `linear-gradient(135deg, hsl(${hue},45%,40%), hsl(${(hue+40)%360},55%,55%))`;
+  }
+  function fmtMsgTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  async function refreshPairReads() {
+    const wrap = document.getElementById('pairReadCard');
+    const list = document.getElementById('pairReadList');
+    if (!Auth.signedIn() || !Sync.enabled()) { wrap.style.display = 'none'; return; }
+    const data = await PairReads.list();
+    const items = data.items || [];
+    if (!items.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    list.innerHTML = items.map((it, i) => {
+      const b = findBook(it.bookId);
+      const partner = it.partner;
+      const partnerName = partner.displayName || partner.username || 'Reader';
+      const statusBadge = it.status === 'active'
+        ? `<span class="pr-badge active">Active</span>`
+        : it.status === 'pending'
+          ? `<span class="pr-badge pending">${it.youAreInviter ? 'Awaiting reply' : 'Wants to pair'}</span>`
+          : `<span class="pr-badge">${it.status}</span>`;
+      let actions = '';
+      if (it.status === 'pending' && !it.youAreInviter) {
+        actions = `
+          <button class="btn btn-primary btn-sm" data-accept="${it.id}">Accept</button>
+          <button class="btn btn-ghost btn-sm" data-decline="${it.id}">Decline</button>`;
+      } else if (it.status === 'pending' && it.youAreInviter) {
+        actions = `<button class="btn btn-outline btn-sm" data-end="${it.id}">Cancel</button>`;
+      } else if (it.status === 'active') {
+        actions = `<button class="btn btn-outline btn-sm" data-expand="${it.id}">Chat</button>`;
+      }
+      return `<div class="pr-row" id="pr-row-${it.id}">
+        <div class="pr-avatar" style="background:${pairAvatarBg(partner)};">${initialsOf(partner)}</div>
+        <div class="pr-cover" data-pr-cover="${i}"></div>
+        <div class="pr-meta">
+          <div class="who">${escapeHtmlPlain(partnerName)} ${statusBadge}</div>
+          <div class="ctx">${escapeHtmlPlain(b.title)}</div>
+        </div>
+        <div class="pr-actions">${actions}</div>
+        <div class="pr-chat" data-chat="${it.id}">
+          <div class="pr-messages" id="pr-msgs-${it.id}"></div>
+          <form class="pr-compose" data-compose="${it.id}">
+            <input type="text" placeholder="Write a message..." autocomplete="off">
+            <button class="btn btn-primary btn-sm" type="submit">Send</button>
+          </form>
+        </div>
+      </div>`;
+    }).join('');
+    // covers
+    items.forEach((it, i) => {
+      const n = list.querySelector(`[data-pr-cover="${i}"]`);
+      if (n) OL.applyCover(n, findBook(it.bookId), 'S');
+    });
+    // wire actions
+    list.querySelectorAll('[data-accept]').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true; try { await PairReads.accept(btn.dataset.accept); } catch (e) { alert(e.message); } finally { btn.disabled = false; }
+      refreshPairReads();
+    }));
+    list.querySelectorAll('[data-decline]').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true; try { await PairReads.decline(btn.dataset.decline); } catch (e) { alert(e.message); } finally { btn.disabled = false; }
+      refreshPairReads();
+    }));
+    list.querySelectorAll('[data-end]').forEach(btn => btn.addEventListener('click', async () => {
+      if (!confirm('Cancel/end this pair read?')) return;
+      btn.disabled = true; try { await PairReads.end(btn.dataset.end); } catch (e) { alert(e.message); } finally { btn.disabled = false; }
+      refreshPairReads();
+    }));
+    list.querySelectorAll('[data-expand]').forEach(btn => btn.addEventListener('click', async () => {
+      const id = btn.dataset.expand;
+      const row = document.getElementById('pr-row-' + id);
+      row.classList.toggle('expanded');
+      if (row.classList.contains('expanded')) await loadPairChat(id);
+    }));
+    list.querySelectorAll('[data-compose]').forEach(form => form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = form.dataset.compose;
+      const input = form.querySelector('input');
+      const text = input.value.trim();
+      if (!text) return;
+      input.disabled = true;
+      try { await PairReads.sendMessage(id, text); input.value = ''; await loadPairChat(id); }
+      catch (err) { alert(err.message); }
+      finally { input.disabled = false; input.focus(); }
+    }));
+  }
+
+  async function loadPairChat(id) {
+    try {
+      const data = await PairReads.get(id);
+      const msgsEl = document.getElementById('pr-msgs-' + id);
+      if (!msgsEl) return;
+      if (!data.messages.length) {
+        msgsEl.innerHTML = `<div class="pr-empty">Say something! Messages stay private to the two of you.</div>`;
+        return;
+      }
+      msgsEl.innerHTML = data.messages.map(m => `
+        <div class="pr-message ${m.mine ? 'mine' : ''}">${escapeHtmlPlain(m.text)}<span class="ts">${fmtMsgTime(m.createdAt)}</span></div>
+      `).join('');
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    } catch (e) {
+      console.warn('pair chat load failed:', e);
+    }
+  }
+
+  function escapeHtmlPlain(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // Read-with-friend invite modal
+  function openInviteDlg() {
+    const id = getCurrentBookId();
+    const b = findBook(id);
+    if (!Auth.signedIn()) { alert('Sign in (Profile) to pair-read.'); return; }
+    inviteForBookId = id;
+    document.getElementById('inviteBookTitle').textContent = b.title;
+    document.getElementById('inviteBookAuthor').textContent = b.author;
+    document.getElementById('inviteSearchInput').value = '';
+    document.getElementById('inviteSearchResults').innerHTML =
+      '<div class="muted" style="font-size:.88rem; text-align:center;">Type a username or name to search.</div>';
+    document.getElementById('inviteError').style.display = 'none';
+    inviteDlg.classList.add('open');
+    setTimeout(() => document.getElementById('inviteSearchInput').focus(), 50);
+  }
+  function closeInviteDlg() { inviteDlg.classList.remove('open'); inviteForBookId = null; }
+
+  let inviteSearchTimer = null;
+  document.getElementById('inviteSearchInput').addEventListener('input', (e) => {
+    clearTimeout(inviteSearchTimer);
+    const q = e.target.value;
+    inviteSearchTimer = setTimeout(async () => {
+      const results = await Social.search(q);
+      const out = document.getElementById('inviteSearchResults');
+      if (!results.length) {
+        out.innerHTML = '<div class="muted" style="font-size:.88rem; text-align:center;">No matches.</div>';
+        return;
+      }
+      out.innerHTML = results.map(u => {
+        const name = u.displayName || u.username || 'Reader';
+        const hue = u.avatarHue ?? 160;
+        const init = (name[0] || 'R').toUpperCase();
+        return `<div style="display:flex; align-items:center; gap:12px; padding:10px; border:1px solid var(--border); border-radius:var(--r-sm);">
+          <div class="avatar" style="width:36px; height:36px; font-size:.9rem; background:linear-gradient(135deg, hsl(${hue},45%,40%), hsl(${(hue+40)%360},55%,55%));">${init}</div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:600;">${escapeHtmlPlain(name)}</div>
+            <div class="muted" style="font-size:.78rem;">@${escapeHtmlPlain(u.username || '—')}</div>
+          </div>
+          <button class="btn btn-primary btn-sm" data-invite="${u.username}">Invite</button>
+        </div>`;
+      }).join('');
+      out.querySelectorAll('[data-invite]').forEach(btn => btn.addEventListener('click', async () => {
+        const username = btn.dataset.invite;
+        const errEl = document.getElementById('inviteError');
+        errEl.style.display = 'none';
+        btn.disabled = true; btn.textContent = 'Inviting…';
+        try {
+          await PairReads.invite(username, inviteForBookId);
+          closeInviteDlg();
+          refreshPairReads();
+        } catch (e) {
+          errEl.style.display = '';
+          errEl.textContent = e.message;
+          btn.disabled = false; btn.textContent = 'Invite';
+        }
+      }));
+    }, 250);
+  });
+  document.getElementById('closeInviteDlg').addEventListener('click', closeInviteDlg);
+  inviteDlg.addEventListener('click', (e) => { if (e.target === inviteDlg) closeInviteDlg(); });
+
+  document.getElementById('readWithFriendBtn').addEventListener('click', openInviteDlg);
+
   // ---------- init ----------
   // Resume Reading button — starts a session on the current book (or focuses if one's running)
   document.getElementById('btnResumeReading').addEventListener('click', () => {
@@ -920,6 +1190,14 @@
     renderHistory();
     renderWeekRecap();
     renderUpNext();
+    // Phase 4 — pair reads only show when signed in with the worker configured.
+    (async () => {
+      if (Auth.configured()) { try { await Auth.load(); } catch {} }
+      if (Auth.signedIn() && Sync.enabled()) {
+        document.getElementById('readWithFriendBtn').style.display = '';
+        refreshPairReads();
+      }
+    })();
     const s = getSession();
     if (s && !s.paused) startTick();
   } catch (err) {
