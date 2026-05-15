@@ -237,13 +237,14 @@
   </div>
 </footer>
 
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
           listCustomShelves, getCustomShelf, createCustomShelf, renameCustomShelf,
           deleteCustomShelf, addToCustomShelf, removeFromCustomShelf,
-          customShelvesContaining } = window.Chaptr;
+          customShelvesContaining,
+          getSmartShelves, getSmartShelfById, isSmartShelfId } = window.Chaptr;
 
   function starString(rating) {
     if (!rating) return '';
@@ -272,11 +273,19 @@
   function isSystemShelf(key) { return systemKeys.includes(key); }
   function getActiveShelfMeta() {
     if (isSystemShelf(activeShelf)) return SYSTEM_SHELVES.find(s => s.key === activeShelf);
+    if (isSmartShelfId(activeShelf)) {
+      const sm = getSmartShelfById(activeShelf);
+      return sm ? { key: activeShelf, name: sm.name, desc: sm.desc, smart: true } : SYSTEM_SHELVES[0];
+    }
     const cs = getCustomShelf(activeShelf);
     return cs ? { key: activeShelf, name: cs.name, desc: 'Custom shelf', custom: true } : SYSTEM_SHELVES[0];
   }
   function getActiveShelfIds() {
     if (isSystemShelf(activeShelf)) return getShelves()[activeShelf] || [];
+    if (isSmartShelfId(activeShelf)) {
+      const sm = getSmartShelfById(activeShelf);
+      return sm ? sm.books : [];
+    }
     const cs = getCustomShelf(activeShelf);
     return cs ? cs.books : [];
   }
@@ -300,8 +309,12 @@
       const active = activeShelf === c.id ? 'active' : '';
       return `<button class="tab ${active}" data-shelf="${c.id}">${escapeHtml(c.name)}<span class="ct">${c.books.length}</span></button>`;
     }).join('');
+    const smartHtml = getSmartShelves().map(sm => {
+      const active = activeShelf === sm.id ? 'active' : '';
+      return `<button class="tab ${active}" data-shelf="${sm.id}" title="${escapeHtml(sm.desc)}">✨ ${escapeHtml(sm.name)}<span class="ct">${sm.books.length}</span></button>`;
+    }).join('');
     const newHtml = `<button class="tab tab-new" data-shelf="__new__" aria-label="New shelf">+ New shelf</button>`;
-    tabs.innerHTML = sysHtml + customHtml + newHtml;
+    tabs.innerHTML = sysHtml + customHtml + smartHtml + newHtml;
     tabs.querySelectorAll('.tab').forEach(t => {
       t.addEventListener('click', () => {
         const target = t.dataset.shelf;
@@ -330,15 +343,19 @@
     const meta = getActiveShelfMeta();
     const el = document.getElementById('shelfList');
     if (!ids.length) {
-      el.innerHTML = `<div class="empty">
-        Nothing on this shelf yet. <a href="library.html">Browse the Library</a> to add books.
-      </div>`;
+      const emptyText = meta.smart
+        ? `No matches yet — this shelf auto-fills as you read.`
+        : `Nothing on this shelf yet. <a href="library.html">Browse the Library</a> to add books.`;
+      el.innerHTML = `<div class="empty">${emptyText}</div>`;
       return;
     }
     el.innerHTML = ids.map((id, i) => {
       const b = findBook(id);
       let actionButtons;
-      if (meta.custom) {
+      if (meta.smart) {
+        // smart shelf: read-only, no destructive actions on this view
+        actionButtons = '';
+      } else if (meta.custom) {
         // custom shelf: just a "Remove from this shelf" action
         actionButtons = `<button class="move-btn" data-remove-custom="${id}">Remove</button>`;
       } else {
@@ -556,7 +573,11 @@
 
   // ---------- swipe between tabs (mobile) ----------
   function shelfOrder() {
-    return [...systemKeys, ...listCustomShelves().map(c => c.id)];
+    return [
+      ...systemKeys,
+      ...listCustomShelves().map(c => c.id),
+      ...getSmartShelves().map(s => s.id),
+    ];
   }
   function switchShelf(direction) {
     const order = shelfOrder();

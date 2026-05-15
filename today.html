@@ -141,6 +141,47 @@
   }
   .week-insight .sparkle { color: var(--accent); margin-right: 4px; }
 
+  /* up next queue */
+  .upnext-card { margin-top: 18px; }
+  .upnext-row {
+    display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: center;
+    padding: 10px 0; border-top: 1px solid var(--border);
+  }
+  .upnext-row:first-of-type { border-top: 0; }
+  .upnext-row .cover-mini { width: 36px; height: 52px; border-radius: 3px;
+    background-size: cover !important; background-position: center !important; box-shadow: var(--shadow-sm); }
+  .upnext-row .t { font-family: var(--serif); font-size: .95rem; line-height: 1.2; }
+  .upnext-row .a { font-size: .78rem; color: var(--ink-3); }
+  .upnext-actions { display: flex; gap: 4px; }
+  .upnext-actions button {
+    width: 30px; height: 30px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--ink-2); display: grid; place-items: center;
+    font-size: .9rem;
+  }
+  .upnext-actions button:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+  .upnext-actions button:disabled { opacity: .35; cursor: default; }
+  .upnext-actions .promote { background: var(--primary); color: #FFF; border-color: var(--primary); padding: 0 12px; width: auto; font-size: .78rem; }
+  .upnext-empty { padding: 14px 0; color: var(--ink-3); font-size: .9rem; }
+  .upnext-picker {
+    margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .upnext-pick-chip {
+    padding: 8px 12px; border-radius: var(--r-pill); background: var(--surface-2);
+    border: 1px solid var(--border); font-size: .82rem; cursor: pointer; color: var(--ink-2);
+  }
+  .upnext-pick-chip:hover { border-color: var(--primary); color: var(--primary); }
+
+  /* current book — resume + last-read */
+  .cc-last { font-size: .78rem; color: var(--ink-3); margin-top: 6px; }
+  .resume-row { margin-top: 12px; }
+
+  /* streak: small freeze pill next to streak number */
+  .streak-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: .68rem; padding: 2px 7px; background: var(--accent-tint);
+    color: var(--accent); border-radius: 999px; font-weight: 600; margin-top: 4px;
+  }
+
   /* heartbeat dot — proves the timer interval is alive */
   .heartbeat {
     display: inline-block; width: 8px; height: 8px; border-radius: 999px;
@@ -205,6 +246,7 @@
       <div class="stat">
         <div class="stat-value" id="streakValue">0</div>
         <div class="stat-label">Day streak</div>
+        <div class="streak-pill" id="streakFreezes" style="display:none;">❄ <span id="streakFreezeCount">0</span></div>
       </div>
       <div class="stat">
         <div class="ring-wrap">
@@ -250,6 +292,18 @@
     </div>
     <div class="week-books" id="weekBooks" style="display:none;"></div>
     <div class="week-insight" id="weekInsight" style="display:none;"></div>
+  </div>
+
+  <div class="card upnext-card">
+    <div class="row between" style="align-items:center;">
+      <div>
+        <div class="eyebrow">Up next</div>
+        <h3 style="margin:4px 0 0;">Your queue</h3>
+      </div>
+      <span class="muted" style="font-size:.78rem;" id="upnextHint"></span>
+    </div>
+    <div id="upnextList"></div>
+    <div class="upnext-picker" id="upnextPicker"></div>
   </div>
 
   <div class="today-grid">
@@ -301,7 +355,11 @@
               <span><span id="ccPct">38</span>% · p.<span id="ccPage">120</span></span>
               <span id="ccTimeLeft">~3h 20m left</span>
             </div>
+            <div class="cc-last" id="ccLast" style="display:none;"></div>
           </div>
+        </div>
+        <div class="resume-row">
+          <button class="btn btn-primary" id="btnResumeReading" style="width:100%;">Resume reading</button>
         </div>
       </div>
 
@@ -358,7 +416,7 @@
   </div>
 </div>
 
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -369,6 +427,9 @@
   const { CATALOG, COVER_GRADIENTS, findBook, pickCoachNudge,
           startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
           getTodayMinutes, getStreak, getLast14Days, computeWeekRecap,
+          getStreakWithFreezes,
+          getUpNext, addToUpNext, removeFromUpNext, moveUpNext, promoteUpNext, MAX_UP_NEXT,
+          getLastSession, relativeFromIso,
           getCurrentBookId, setCurrentBookId,
           getBookProgress, setBookProgress,
           getShelves, getCustomBooks,
@@ -405,8 +466,16 @@
 
   // ---------- streak + daily ring ----------
   function refreshStats() {
-    const streak = getStreak(10);
+    const { streak, freezesUsed, freezesAvailable } = getStreakWithFreezes(10);
     document.getElementById('streakValue').textContent = streak;
+    const freezePill = document.getElementById('streakFreezes');
+    if (freezesAvailable > 0 || freezesUsed > 0) {
+      freezePill.style.display = '';
+      document.getElementById('streakFreezeCount').textContent =
+        freezesUsed > 0 ? `${freezesUsed} used · ${freezesAvailable - freezesUsed} left` : `${freezesAvailable} freeze${freezesAvailable === 1 ? '' : 's'}`;
+    } else {
+      freezePill.style.display = 'none';
+    }
     const mins = getTodayMinutes();
     document.getElementById('ringMinutes').textContent = mins;
     document.getElementById('ringGoal').textContent = DAILY_GOAL_MIN;
@@ -434,6 +503,30 @@
     const h = Math.floor(minsLeft / 60); const m = minsLeft % 60;
     const timeLeft = pct >= 100 ? 'Finished!' : minsLeft < 2 ? 'Almost done' : `~${h ? h + 'h ' : ''}${m}m left · your pace`;
     document.getElementById('ccTimeLeft').textContent = timeLeft;
+
+    // last session for this book
+    const last = getLastSession(id);
+    const ccLast = document.getElementById('ccLast');
+    if (last) {
+      const when = relativeFromIso(last.startedAt || (last.date + 'T12:00:00'));
+      const minsTxt = last.minutes >= 1 ? `${last.minutes}m` : (last.ms ? `${Math.round(last.ms/1000)}s` : '');
+      const pagesTxt = last.pages ? `, ${last.pages}p` : '';
+      ccLast.textContent = `Last read ${when}${minsTxt ? ' · ' + minsTxt : ''}${pagesTxt}`;
+      ccLast.style.display = '';
+    } else {
+      ccLast.textContent = 'Not started yet — tap Resume to begin.';
+      ccLast.style.display = '';
+    }
+    // Resume button label + handler
+    const rbtn = document.getElementById('btnResumeReading');
+    const active = getSession();
+    if (active) {
+      rbtn.textContent = active.bookId === id ? 'Open active session' : 'Stop active session to switch';
+      rbtn.disabled = active.bookId !== id;
+    } else {
+      rbtn.textContent = last ? 'Resume reading' : 'Start reading';
+      rbtn.disabled = false;
+    }
   }
 
   // ---------- book picker ----------
@@ -590,7 +683,75 @@
     refreshCurrentBook();
     renderHistory();
     renderWeekRecap();
+    renderUpNext();
   });
+
+  // ---------- up next queue ----------
+  function renderUpNext() {
+    const list = document.getElementById('upnextList');
+    const picker = document.getElementById('upnextPicker');
+    const hint = document.getElementById('upnextHint');
+    const queue = getUpNext();
+    hint.textContent = `${queue.length} / ${MAX_UP_NEXT}`;
+
+    if (!queue.length) {
+      list.innerHTML = `<div class="upnext-empty">Queue is empty. Pick from your Want-to-Read shelf below.</div>`;
+    } else {
+      list.innerHTML = queue.map((id, i) => {
+        const b = findBook(id);
+        return `<div class="upnext-row">
+          <div class="cover-mini" data-up-cover="${i}"></div>
+          <div>
+            <div class="t">${b.title}</div>
+            <div class="a">${b.author} · ${b.pages}p</div>
+          </div>
+          <div class="upnext-actions">
+            <button data-up-arrow="up" data-id="${id}" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+            <button data-up-arrow="down" data-id="${id}" ${i === queue.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
+            <button class="promote" data-up-promote="${id}">Read this</button>
+            <button data-up-remove="${id}" aria-label="Remove">✕</button>
+          </div>
+        </div>`;
+      }).join('');
+      queue.forEach((id, i) => {
+        const node = list.querySelector(`[data-up-cover="${i}"]`);
+        if (node) OL.applyCover(node, findBook(id), 'S');
+      });
+      list.querySelectorAll('[data-up-arrow]').forEach(btn => btn.addEventListener('click', () => {
+        moveUpNext(btn.dataset.id, btn.dataset.upArrow === 'up' ? -1 : +1);
+        renderUpNext();
+      }));
+      list.querySelectorAll('[data-up-remove]').forEach(btn => btn.addEventListener('click', () => {
+        removeFromUpNext(btn.dataset.upRemove);
+        renderUpNext();
+      }));
+      list.querySelectorAll('[data-up-promote]').forEach(btn => btn.addEventListener('click', () => {
+        promoteUpNext(btn.dataset.upPromote);
+        renderUpNext();
+        refreshCurrentBook();
+      }));
+    }
+
+    // Picker: books from Want-to-Read not already in queue
+    const shelves = getShelves();
+    const inQueue = new Set(queue);
+    const candidates = shelves.wantToRead.filter(id => !inQueue.has(id)).slice(0, 6);
+    if (!candidates.length || queue.length >= MAX_UP_NEXT) {
+      picker.innerHTML = queue.length >= MAX_UP_NEXT
+        ? `<span class="muted" style="font-size:.8rem;">Queue is full — promote or remove one to add more.</span>`
+        : `<span class="muted" style="font-size:.8rem;">Add books to Want-to-Read in Library to queue them here.</span>`;
+    } else {
+      picker.innerHTML = `<span class="muted" style="font-size:.8rem; margin-right:4px; align-self:center;">Add from Want:</span>` +
+        candidates.map(id => {
+          const b = findBook(id);
+          return `<button class="upnext-pick-chip" data-up-add="${id}">+ ${b.title}</button>`;
+        }).join('');
+      picker.querySelectorAll('[data-up-add]').forEach(btn => btn.addEventListener('click', () => {
+        addToUpNext(btn.dataset.upAdd);
+        renderUpNext();
+      }));
+    }
+  }
 
   // ---------- weekly recap ----------
   function renderWeekRecap() {
@@ -700,6 +861,18 @@
   }
 
   // ---------- init ----------
+  // Resume Reading button — starts a session on the current book (or focuses if one's running)
+  document.getElementById('btnResumeReading').addEventListener('click', () => {
+    const active = getSession();
+    if (active) {
+      // No-op aside from scrolling to the timer
+      document.querySelector('.timer-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    onStart();
+    document.querySelector('.timer-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
   try {
     setGreeting();
     refreshStats();
@@ -709,6 +882,7 @@
     renderTimerState();
     renderHistory();
     renderWeekRecap();
+    renderUpNext();
     const s = getSession();
     if (s && !s.paused) startTick();
   } catch (err) {

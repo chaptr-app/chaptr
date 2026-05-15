@@ -25,6 +25,8 @@ const K = {
   bookProgress: 'chaptr.bookProgress', // map of bookId -> current page
   reviews: 'chaptr.reviews',           // map of bookId -> { rating, text, date }
   customShelves: 'chaptr.customShelves', // map of shelfId -> { id, name, createdAt, books[] }
+  streakFreezes: 'chaptr.streakFreezes', // { count, lastEarnedWeek (ISO Mon date) }
+  upNext: 'chaptr.upNext',             // ordered array of bookIds (max 3)
 };
 
 // ---------- mock book catalog ----------
@@ -246,6 +248,7 @@ function stopSession({ endPage, startPage, mood }) {
   const entry = {
     bookId: s.bookId,
     date: new Date().toISOString().slice(0, 10),
+    startedAt: s.startedAt || null,
     minutes,
     ms,
     pages,
@@ -259,6 +262,201 @@ function stopSession({ endPage, startPage, mood }) {
   if (endPage > 0) setBookProgress(s.bookId, endPage);
   clearSession();
   return entry;
+}
+
+// ---------- streak freezes (Duolingo-style) ----------
+const MAX_FREEZES = 3;
+function isoMonday(d) {
+  const x = new Date(d); x.setHours(0, 0, 0, 0);
+  const dow = x.getDay();
+  x.setDate(x.getDate() - (dow === 0 ? 6 : dow - 1));
+  return x.toISOString().slice(0, 10);
+}
+function getStreakFreezeState() {
+  return Store.get(K.streakFreezes, { count: 1, lastEarnedWeek: '' });
+}
+function setStreakFreezeState(s) { Store.set(K.streakFreezes, s); }
+// Auto-earn 1 freeze each new ISO week (Mon). Caps at MAX_FREEZES.
+function tryEarnStreakFreeze() {
+  const s = getStreakFreezeState();
+  const thisWeek = isoMonday(new Date());
+  if (s.lastEarnedWeek !== thisWeek && s.count < MAX_FREEZES) {
+    s.count = Math.min(MAX_FREEZES, (s.count || 0) + 1);
+    s.lastEarnedWeek = thisWeek;
+    setStreakFreezeState(s);
+  } else if (s.lastEarnedWeek !== thisWeek) {
+    // record the week-stamp even when already capped, so we don't earn 5× the next time
+    s.lastEarnedWeek = thisWeek;
+    setStreakFreezeState(s);
+  }
+  return s;
+}
+function getStreakFreezeCount() { return getStreakFreezeState().count || 0; }
+
+// Streak that can spend freezes to bridge gaps.
+// Returns { streak, freezesUsed, freezesAvailable }
+function getStreakWithFreezes(minMinutes = 10) {
+  const hist = Store.get(K.history, []);
+  const byDay = {};
+  for (const e of hist) byDay[e.date] = (byDay[e.date] || 0) + (e.minutes || 0);
+  const available = getStreakFreezeCount();
+  let streak = 0, freezesUsed = 0;
+  const d = new Date();
+  // Include today only if it cleared the threshold
+  if ((byDay[dayKey(d)] || 0) >= minMinutes) {
+    streak = 1;
+    d.setDate(d.getDate() - 1);
+  } else {
+    d.setDate(d.getDate() - 1);
+  }
+  while (true) {
+    if ((byDay[dayKey(d)] || 0) >= minMinutes) {
+      streak += 1;
+      d.setDate(d.getDate() - 1);
+    } else if (freezesUsed < available) {
+      freezesUsed += 1;
+      streak += 1;
+      d.setDate(d.getDate() - 1);
+    } else break;
+  }
+  return { streak, freezesUsed, freezesAvailable: available };
+}
+
+// ---------- up next queue ----------
+const MAX_UP_NEXT = 3;
+function getUpNext() { return Store.get(K.upNext, []); }
+function setUpNext(arr) { Store.set(K.upNext, (arr || []).slice(0, MAX_UP_NEXT)); }
+function addToUpNext(bookId) {
+  const q = getUpNext().filter(b => b !== bookId);
+  if (q.length >= MAX_UP_NEXT) return false;
+  q.push(bookId);
+  setUpNext(q);
+  return true;
+}
+function removeFromUpNext(bookId) { setUpNext(getUpNext().filter(b => b !== bookId)); }
+function moveUpNext(bookId, dir) {
+  const q = getUpNext();
+  const i = q.indexOf(bookId);
+  if (i < 0) return;
+  const j = i + dir;
+  if (j < 0 || j >= q.length) return;
+  [q[i], q[j]] = [q[j], q[i]];
+  setUpNext(q);
+}
+function promoteUpNext(bookId) {
+  setCurrentBookId(bookId);
+  removeFromUpNext(bookId);
+}
+
+// ---------- last session per book (for "Pick up where you left off") ----------
+function getLastSession(bookId) {
+  const hist = Store.get(K.history, []);
+  for (let i = hist.length - 1; i >= 0; i--) if (hist[i].bookId === bookId) return hist[i];
+  return null;
+}
+// "3 hours ago", "yesterday", "5 days ago"
+function relativeFromIso(iso) {
+  if (!iso) return null;
+  const then = new Date(iso); if (isNaN(then.getTime())) return null;
+  const diffMs = Date.now() - then.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks} weeks ago`;
+  const months = Math.floor(days / 30);
+  return months === 1 ? 'a month ago' : `${months} months ago`;
+}
+
+// ---------- smart shelves (computed, read-only) ----------
+// Returns 3 virtual shelves. Each: { id, name, desc, books: [bookId...] }
+function getSmartShelves() {
+  const wpm = Store.get(K.wpm, 250);
+  const shelves = getShelves();
+  const reviews = getReviews();
+  const customMap = getCustomBooks();
+  // Universe of known books = catalog + customs
+  const universe = [...CATALOG, ...Object.values(customMap)];
+
+  // Quick reads — finish in under 4 hours at the user's WPM
+  const quickReads = universe.filter(b => {
+    const mins = (b.pages * 275) / wpm;
+    return mins > 0 && mins < 240;
+  }).map(b => b.id);
+
+  // Stalled — books on Reading shelf whose latest session is >30 days ago (or never)
+  const now = Date.now();
+  const stalled = shelves.reading.filter(id => {
+    const last = getLastSession(id);
+    if (!last) return true;
+    const sessionTime = last.startedAt ? new Date(last.startedAt).getTime() : new Date(last.date + 'T12:00:00').getTime();
+    return (now - sessionTime) > (30 * 86400 * 1000);
+  });
+
+  // Re-read candidates — books on Read shelf rated >= 4.5★
+  const rereads = shelves.read.filter(id => {
+    const rv = reviews[id];
+    return rv && rv.rating && rv.rating >= 4.5;
+  });
+
+  return [
+    { id: '__smart_quick',   name: 'Quick reads',       desc: `Finish in under 4h at your pace`, books: quickReads, smart: true },
+    { id: '__smart_stalled', name: 'Stalled',           desc: 'No session in 30+ days',           books: stalled,    smart: true },
+    { id: '__smart_reread',  name: 'Re-read candidates',desc: 'You loved these — worth another?', books: rereads,    smart: true },
+  ];
+}
+function isSmartShelfId(id) { return typeof id === 'string' && id.startsWith('__smart_'); }
+function getSmartShelfById(id) { return getSmartShelves().find(s => s.id === id) || null; }
+
+// ---------- richer reader persona ----------
+function buildReaderPersona() {
+  const hist = Store.get(K.history, []);
+  const wpm = Store.get(K.wpm, 0);
+  if (!hist.length) return null;
+
+  const total = hist.reduce((a, e) => a + (e.minutes || 0), 0);
+  const sessions = hist.length;
+  const avgSession = Math.round(total / sessions);
+
+  // Genre minutes
+  const genreMins = {};
+  for (const e of hist) {
+    const b = findBook(e.bookId);
+    genreMins[b.genre] = (genreMins[b.genre] || 0) + (e.minutes || 0);
+  }
+  const topGenre = Object.entries(genreMins).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+
+  // Mood
+  const moodCounts = {};
+  for (const e of hist) if (e.mood) moodCounts[e.mood] = (moodCounts[e.mood] || 0) + 1;
+  const topMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  const moodLabel = { '😌': 'peaceful', '⚡': 'energized', '😴': 'sleepy', '🤯': 'mind-blown' }[topMood] || null;
+
+  // Peak hour (only counts sessions with startedAt)
+  const hourBuckets = { morning: 0, afternoon: 0, evening: 0, late: 0 };
+  for (const e of hist) {
+    if (!e.startedAt) continue;
+    const h = new Date(e.startedAt).getHours();
+    if (h < 12) hourBuckets.morning += (e.minutes || 0);
+    else if (h < 17) hourBuckets.afternoon += (e.minutes || 0);
+    else if (h < 22) hourBuckets.evening += (e.minutes || 0);
+    else hourBuckets.late += (e.minutes || 0);
+  }
+  const peakHour = Object.values(hourBuckets).some(v => v > 0)
+    ? Object.entries(hourBuckets).sort((a, b) => b[1] - a[1])[0][0] : null;
+
+  // Session length descriptor
+  const lenWord = avgSession < 15 ? 'snack-sized' : avgSession < 30 ? 'methodical' : avgSession < 60 ? 'deep' : 'marathon';
+
+  return {
+    sessions, total, avgSession, wpm,
+    topGenre, topMood, moodLabel, peakHour, lenWord,
+  };
 }
 
 // ---------- streak + daily ----------
@@ -608,11 +806,15 @@ function mountNowReadingPill() {
   rafId = requestAnimationFrame(tickPill);
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => { mountBottomNav(); mountNowReadingPill(); });
-} else {
+function bootCommon() {
+  try { tryEarnStreakFreeze(); } catch {}
   mountBottomNav();
   mountNowReadingPill();
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootCommon);
+} else {
+  bootCommon();
 }
 
 // ---------- swipe gesture helper ----------
@@ -645,6 +847,11 @@ window.Chaptr = {
   startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
   getTodayMinutes, getStreak, getLast14Days, computeWeekRecap,
   getYearActivity, activityLevel,
+  tryEarnStreakFreeze, getStreakFreezeCount, getStreakWithFreezes,
+  getUpNext, addToUpNext, removeFromUpNext, moveUpNext, promoteUpNext, MAX_UP_NEXT,
+  getLastSession, relativeFromIso,
+  getSmartShelves, getSmartShelfById, isSmartShelfId,
+  buildReaderPersona,
   getShelves, setShelves, shelfFor, moveToShelf,
   listCustomShelves, getCustomShelf, createCustomShelf, renameCustomShelf, deleteCustomShelf,
   addToCustomShelf, removeFromCustomShelf, customShelvesContaining,

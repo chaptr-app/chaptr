@@ -115,8 +115,8 @@
   </section>
 
   <div class="stats-row">
-    <div class="card stat-tile"><div class="label">Day streak</div><div class="value" id="psStreak">0</div><div class="sub">consecutive days ≥10 min</div></div>
-    <div class="card stat-tile"><div class="label">Total minutes</div><div class="value" id="psMinutes">0</div><div class="sub">since you started</div></div>
+    <div class="card stat-tile"><div class="label">Day streak</div><div class="value" id="psStreak">0</div><div class="sub" id="psStreakSub">consecutive days ≥10 min</div></div>
+    <div class="card stat-tile"><div class="label">Streak freezes</div><div class="value" id="psFreezes">0</div><div class="sub">earned weekly · max 3</div></div>
     <div class="card stat-tile"><div class="label">Sessions</div><div class="value" id="psSessions">0</div><div class="sub">logged so far</div></div>
     <div class="card stat-tile"><div class="label">Avg WPM</div><div class="value" id="psWpm">—</div><div class="sub">trailing average</div></div>
   </div>
@@ -212,19 +212,22 @@
   </div>
 </footer>
 
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 <script>
-  const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel, Store, K } = window.Chaptr;
+  const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
+          getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona, Store, K } = window.Chaptr;
 
   const LEVEL_COLORS = ['#F4EFE6', 'hsl(150,30%,80%)', 'hsl(150,32%,60%)', 'hsl(150,38%,45%)', '#2D4A3E'];
 
   // --- top stats ---
   function renderStats() {
     const hist = Store.get(K.history, []);
-    document.getElementById('psStreak').textContent = getStreak(10);
+    const { streak, freezesUsed, freezesAvailable } = getStreakWithFreezes(10);
+    document.getElementById('psStreak').textContent = streak;
+    document.getElementById('psStreakSub').textContent =
+      freezesUsed > 0 ? `${freezesUsed} freeze${freezesUsed === 1 ? '' : 's'} keeping it alive` : 'consecutive days ≥10 min';
+    document.getElementById('psFreezes').textContent = freezesAvailable;
     document.getElementById('psSessions').textContent = hist.length;
-    const total = hist.reduce((a, e) => a + (e.minutes || 0), 0);
-    document.getElementById('psMinutes').textContent = total;
     const wpms = hist.map(e => e.wpm).filter(Boolean);
     if (wpms.length) {
       const avg = Math.round(wpms.reduce((a, n) => a + n, 0) / wpms.length);
@@ -234,20 +237,28 @@
 
   // --- persona blurb ---
   function renderPersona() {
-    const hist = Store.get(K.history, []);
-    if (!hist.length) return;
-    const total = hist.reduce((a, e) => a + (e.minutes || 0), 0);
-    const avg = Math.round(total / hist.length) || 0;
-    const genres = {};
-    for (const e of hist) {
-      const b = findBook(e.bookId);
-      genres[b.genre] = (genres[b.genre] || 0) + (e.minutes || 0);
-    }
-    const topGenre = Object.entries(genres).sort((a,b) => b[1] - a[1])[0]?.[0] || '—';
-    const hour = new Date().getHours();
-    const peak = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : hour < 22 ? 'evening' : 'late-night';
-    document.getElementById('personaText').textContent =
-      `A ${peak} ${topGenre.toLowerCase()} reader. Sessions average ${avg} minutes — long enough for real depth, short enough to keep streaks alive.`;
+    const p = buildReaderPersona();
+    if (!p) return;
+    const peakLabel = p.peakHour
+      ? { morning: 'morning', afternoon: 'afternoon', evening: 'evening', late: 'late-night' }[p.peakHour]
+      : null;
+    const parts = [];
+    parts.push(peakLabel
+      ? `A ${peakLabel} ${p.topGenre ? p.topGenre.toLowerCase() : 'mixed-genre'} reader`
+      : `A ${p.topGenre ? p.topGenre.toLowerCase() : 'mixed-genre'} reader`);
+    parts.push(`${p.lenWord} sessions averaging ${p.avgSession}m`);
+    if (p.wpm) parts.push(`pace ${p.wpm} WPM`);
+    if (p.moodLabel) parts.push(`mostly ${p.moodLabel}`);
+    const sentence1 = parts.join(' · ') + '.';
+    const sentence2 = `${p.sessions} session${p.sessions === 1 ? '' : 's'} logged so far.`;
+    document.getElementById('personaText').textContent = sentence1 + ' ' + sentence2;
+
+    const sigs = [];
+    if (p.topGenre) sigs.push('genre × WPM');
+    if (p.peakHour) sigs.push('time-of-day');
+    if (p.moodLabel) sigs.push('mood tags');
+    sigs.push('session length distribution');
+    document.getElementById('personaSignals').textContent = 'Based on: ' + sigs.join(' · ');
   }
 
   // --- pace by genre ---
