@@ -27,6 +27,12 @@ const K = {
   customShelves: 'chaptr.customShelves', // map of shelfId -> { id, name, createdAt, books[] }
   streakFreezes: 'chaptr.streakFreezes', // { count, lastEarnedWeek (ISO Mon date) }
   upNext: 'chaptr.upNext',             // ordered array of bookIds (max 3)
+  bookWpm: 'chaptr.bookWpm',           // map of bookId -> array of recent WPM (trailing 10)
+  yearChallenge: 'chaptr.yearChallenge', // { year, type: 'books'|'hours', target }
+  goalType: 'chaptr.goalType',         // 'minutes' | 'pages'
+  dailyGoalPages: 'chaptr.dailyGoalPages', // number, default 20
+  aiSettings: 'chaptr.aiSettings',     // { coachCard, forYou, askClaude, readerPersona, friendFeed, smartShelves }
+  shelfDates: 'chaptr.shelfDates',     // map of bookId -> { read: 'YYYY-MM-DD' } (date moved to Read)
 };
 
 // ---------- mock book catalog ----------
@@ -258,7 +264,14 @@ function stopSession({ endPage, startPage, mood }) {
   const hist = Store.get(K.history, []);
   hist.push(entry);
   Store.set(K.history, hist);
-  if (wpm) Store.set(K.wpm, wpm);
+  if (wpm) {
+    Store.set(K.wpm, wpm);
+    const bw = Store.get(K.bookWpm, {});
+    const arr = bw[s.bookId] || [];
+    arr.push(wpm);
+    bw[s.bookId] = arr.slice(-10);
+    Store.set(K.bookWpm, bw);
+  }
   if (endPage > 0) setBookProgress(s.bookId, endPage);
   clearSession();
   return entry;
@@ -615,7 +628,14 @@ function moveToShelf(bookId, shelf) {
   for (const k of ['reading', 'wantToRead', 'read']) s[k] = s[k].filter(x => x !== bookId);
   if (shelf) s[shelf].push(bookId);
   setShelves(s);
+  if (shelf === 'read') {
+    const dates = Store.get(K.shelfDates, {});
+    if (!dates[bookId]) dates[bookId] = {};
+    dates[bookId].read = new Date().toISOString().slice(0, 10);
+    Store.set(K.shelfDates, dates);
+  }
 }
+function getShelfDates() { return Store.get(K.shelfDates, {}); }
 
 // ---------- reviews ----------
 function getReviews() { return Store.get(K.reviews, {}); }
@@ -715,6 +735,150 @@ function customShelvesContaining(bookId) {
   return listCustomShelves().filter(s => s.books.includes(bookId));
 }
 
+// ---------- per-book WPM (smoothed over trailing 10 sessions) ----------
+function getBookWpm(bookId) {
+  const bw = Store.get(K.bookWpm, {});
+  const arr = bw[bookId] || [];
+  if (!arr.length) return Store.get(K.wpm, 250);
+  return Math.round(arr.reduce((a, n) => a + n, 0) / arr.length);
+}
+
+// ---------- daily goal (minutes or pages) ----------
+function getGoalType() { return Store.get(K.goalType, 'minutes'); }
+function setGoalType(t) { if (t === 'minutes' || t === 'pages') Store.set(K.goalType, t); }
+function getDailyGoalPages() { return Store.get(K.dailyGoalPages, 20); }
+function setDailyGoalPages(p) { Store.set(K.dailyGoalPages, Math.max(1, Math.min(500, p|0))); }
+function getTodayPages() {
+  const hist = Store.get(K.history, []);
+  const t = todayKey();
+  return hist.filter(e => e.date === t).reduce((a, e) => a + (e.pages || 0), 0);
+}
+
+// ---------- annual reading challenge ----------
+function getYearChallenge() {
+  const y = new Date().getFullYear();
+  const c = Store.get(K.yearChallenge, null);
+  if (!c || c.year !== y) {
+    const fresh = { year: y, type: 'books', target: 12 };
+    Store.set(K.yearChallenge, fresh);
+    return fresh;
+  }
+  return c;
+}
+function setYearChallenge(partial) {
+  const c = { ...getYearChallenge(), ...partial, year: new Date().getFullYear() };
+  if (c.type !== 'books' && c.type !== 'hours') c.type = 'books';
+  c.target = Math.max(1, Math.min(c.type === 'books' ? 365 : 8760, parseInt(c.target, 10) || 1));
+  Store.set(K.yearChallenge, c);
+  return c;
+}
+function getYearChallengeProgress() {
+  const c = getYearChallenge();
+  const y = c.year;
+  if (c.type === 'hours') {
+    const hist = Store.get(K.history, []);
+    const ms = hist
+      .filter(e => e.date.startsWith(y + '-'))
+      .reduce((a, e) => a + (e.ms || (e.minutes || 0) * 60000), 0);
+    const hours = ms / 3600000;
+    return { ...c, current: Math.round(hours * 10) / 10, pct: Math.min(1, hours / c.target) };
+  } else {
+    // books finished this year = on Read shelf with shelfDates.read in this year
+    const dates = getShelfDates();
+    const finishedThisYear = Object.entries(dates)
+      .filter(([, d]) => d.read && d.read.startsWith(y + '-')).length;
+    return { ...c, current: finishedThisYear, pct: Math.min(1, finishedThisYear / c.target) };
+  }
+}
+
+// ---------- AI settings ----------
+const DEFAULT_AI_SETTINGS = {
+  coachCard: true, forYou: true, askClaude: true,
+  readerPersona: true, friendFeed: true, smartShelves: true,
+};
+function getAISettings() {
+  return { ...DEFAULT_AI_SETTINGS, ...Store.get(K.aiSettings, {}) };
+}
+function setAISetting(key, value) {
+  const s = getAISettings();
+  s[key] = !!value;
+  Store.set(K.aiSettings, s);
+}
+function exportReaderProfile() {
+  const persona = (typeof buildReaderPersona === 'function') ? buildReaderPersona() : null;
+  return {
+    exportedAt: new Date().toISOString(),
+    persona,
+    wpm: Store.get(K.wpm, null),
+    bookWpm: Store.get(K.bookWpm, {}),
+    history: Store.get(K.history, []),
+    aiSettings: getAISettings(),
+    bookProgress: Store.get(K.bookProgress, {}),
+    customBooks: getCustomBooks(),
+  };
+}
+function wipeReaderProfile() {
+  // Clears AI-derived/behavioral data. Leaves shelves, reviews, custom shelves intact.
+  [K.history, K.wpm, K.bookWpm, K.session, K.bookProgress, K.streakFreezes].forEach(k => Store.remove(k));
+}
+
+// ---------- auto-pause on background (90s rule) ----------
+let _bgTimer = null;
+function startBackgroundPauseWatcher(timeoutMs = 90000) {
+  if (typeof document === 'undefined' || document.__chaptrBgWatcher) return;
+  document.__chaptrBgWatcher = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      _bgTimer = setTimeout(() => {
+        const s = getSession();
+        if (s && !s.paused) pauseSession();
+      }, timeoutMs);
+    } else if (_bgTimer) {
+      clearTimeout(_bgTimer);
+      _bgTimer = null;
+    }
+  });
+}
+
+// ---------- coach "tell me more" (single-turn Claude call via existing worker) ----------
+async function askCoachMore(nudgeText) {
+  const url = Store.get('chaptr.workerUrl', '');
+  if (!url) {
+    return { ok: false, error: 'Set your Claude Worker URL in Profile to get expanded coach thoughts.' };
+  }
+  try {
+    // Reuse the books worker as a generic chat endpoint — the prompt asks for an
+    // elaboration string and we'll pluck it from books[0].why if the worker
+    // happens to be the recommendation variant.
+    const dna = (function() {
+      const hist = Store.get(K.history, []);
+      const wpm = Store.get(K.wpm, 250);
+      const total = hist.reduce((a, e) => a + (e.minutes || 0), 0);
+      const avgSession = hist.length ? Math.round(total / hist.length) : 0;
+      const genres = {};
+      for (const e of hist) {
+        const b = findBook(e.bookId);
+        genres[b.genre] = (genres[b.genre] || 0) + (e.minutes || 0);
+      }
+      const topGenre = Object.entries(genres).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'unknown';
+      return { wpm, avgSession, topGenre, mood: 'unknown', shelfCount: 0 };
+    })();
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `The user got this reading coach nudge today: "${nudgeText}". They tapped to learn more. Give exactly ONE friendly, specific, 1-sentence elaboration tying the nudge to their reader DNA. Put that sentence in the 'why' field of the first book object and use any real book that fits the context as title/author. Return the standard 3-book JSON array.`,
+        readerDna: dna,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.books?.[0]?.why) throw new Error(data.error || 'Bad response');
+    return { ok: true, text: data.books[0].why, suggestion: data.books[0] };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 // ---------- current book ----------
 function getCurrentBookId() { return Store.get(K.currentBook, 'b2'); }
 function setCurrentBookId(id) { Store.set(K.currentBook, id); }
@@ -808,6 +972,7 @@ function mountNowReadingPill() {
 
 function bootCommon() {
   try { tryEarnStreakFreeze(); } catch {}
+  try { startBackgroundPauseWatcher(); } catch {}
   mountBottomNav();
   mountNowReadingPill();
 }
@@ -852,6 +1017,12 @@ window.Chaptr = {
   getLastSession, relativeFromIso,
   getSmartShelves, getSmartShelfById, isSmartShelfId,
   buildReaderPersona,
+  getBookWpm,
+  getGoalType, setGoalType, getDailyGoalPages, setDailyGoalPages, getTodayPages,
+  getYearChallenge, setYearChallenge, getYearChallengeProgress,
+  getAISettings, setAISetting, exportReaderProfile, wipeReaderProfile,
+  askCoachMore,
+  getShelfDates,
   getShelves, setShelves, shelfFor, moveToShelf,
   listCustomShelves, getCustomShelf, createCustomShelf, renameCustomShelf, deleteCustomShelf,
   addToCustomShelf, removeFromCustomShelf, customShelvesContaining,

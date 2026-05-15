@@ -237,7 +237,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
@@ -309,10 +309,11 @@
       const active = activeShelf === c.id ? 'active' : '';
       return `<button class="tab ${active}" data-shelf="${c.id}">${escapeHtml(c.name)}<span class="ct">${c.books.length}</span></button>`;
     }).join('');
-    const smartHtml = getSmartShelves().map(sm => {
+    const aiOn = (window.Chaptr.getAISettings ? window.Chaptr.getAISettings().smartShelves : true);
+    const smartHtml = aiOn ? getSmartShelves().map(sm => {
       const active = activeShelf === sm.id ? 'active' : '';
       return `<button class="tab ${active}" data-shelf="${sm.id}" title="${escapeHtml(sm.desc)}">✨ ${escapeHtml(sm.name)}<span class="ct">${sm.books.length}</span></button>`;
-    }).join('');
+    }).join('') : '';
     const newHtml = `<button class="tab tab-new" data-shelf="__new__" aria-label="New shelf">+ New shelf</button>`;
     tabs.innerHTML = sysHtml + customHtml + smartHtml + newHtml;
     tabs.querySelectorAll('.tab').forEach(t => {

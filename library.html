@@ -243,13 +243,35 @@
   </div>
 </footer>
 
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
           getReviews, FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
-          listCustomShelves,
+          listCustomShelves, getAISettings,
           Store, K, OL } = window.Chaptr;
+
+  // Quietly hide AI surfaces the user has switched off in Profile.
+  function applyAIGates() {
+    const s = getAISettings();
+    const askCard = document.querySelector('.ask-card');
+    if (askCard) askCard.style.display = s.askClaude ? '' : 'none';
+
+    const findSectionHead = (eyebrowText) => {
+      return Array.from(document.querySelectorAll('.section-head .eyebrow'))
+        .find(el => el.textContent.trim().toLowerCase() === eyebrowText)?.closest('.section-head');
+    };
+    const forYouHead = findSectionHead('for you');
+    if (forYouHead) {
+      forYouHead.style.display = s.forYou ? '' : 'none';
+      document.getElementById('forYouFeed').style.display = s.forYou ? '' : 'none';
+    }
+    const friendsHead = findSectionHead('friends');
+    if (friendsHead) {
+      friendsHead.style.display = s.friendFeed ? '' : 'none';
+      document.getElementById('friendFeed').style.display = s.friendFeed ? '' : 'none';
+    }
+  }
 
   function starString(rating) {
     if (!rating) return '';
@@ -580,6 +602,7 @@
   wireBrowseChips();
   renderShelves();
   renderDNA();
+  applyAIGates();
 </script>
 </body>
 </html>

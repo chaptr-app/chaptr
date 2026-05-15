@@ -71,6 +71,51 @@
   .persona-card .quote { font-family: var(--serif); font-size: 1.4rem; line-height: 1.3; color: var(--ink); margin: 8px 0 12px; }
   .persona-card .signals { font-size: .82rem; color: var(--ink-3); }
 
+  /* annual challenge */
+  .yc-row { display: grid; grid-template-columns: 130px 1fr; gap: 20px; align-items: center; }
+  @media (max-width: 720px) { .yc-row { grid-template-columns: 110px 1fr; gap: 16px; } }
+  .yc-ring { position: relative; width: 130px; height: 130px; }
+  @media (max-width: 720px) { .yc-ring { width: 110px; height: 110px; } }
+  .yc-ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+  .yc-bg { fill: none; stroke: var(--surface-2); stroke-width: 10; }
+  .yc-fg { fill: none; stroke: var(--primary); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .6s ease; }
+  .yc-center { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .yc-cur { font-family: var(--serif); font-size: 1.8rem; line-height: 1; color: var(--ink); }
+  .yc-target { font-size: .78rem; color: var(--ink-3); margin-top: 4px; }
+  .yc-controls { display: flex; flex-direction: column; gap: 10px; }
+  .yc-controls label { font-size: .8rem; color: var(--ink-3); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .yc-type-toggle { display: flex; gap: 6px; }
+  .yc-type-toggle button {
+    flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r-pill);
+    background: var(--surface); color: var(--ink-2); font: inherit; font-size: .85rem; cursor: pointer;
+  }
+  .yc-type-toggle button.active { border-color: var(--primary); background: var(--primary-tint); color: var(--primary); }
+  .yc-target-input { display: flex; align-items: center; gap: 8px; }
+  .yc-target-input input {
+    width: 90px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-sm);
+    font: inherit; text-align: right; background: var(--bg); color: var(--ink);
+  }
+
+  /* AI settings toggle row */
+  .ai-row {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    padding: 14px 0; border-top: 1px solid var(--border);
+  }
+  .ai-row:first-of-type { border-top: 0; }
+  .ai-row .ai-meta .name { font-weight: 500; color: var(--ink); }
+  .ai-row .ai-meta .desc { color: var(--ink-3); font-size: .82rem; }
+  .switch {
+    width: 44px; height: 26px; border-radius: 999px; background: var(--border);
+    position: relative; cursor: pointer; flex-shrink: 0; transition: background .15s;
+  }
+  .switch::after {
+    content: ''; position: absolute; top: 3px; left: 3px;
+    width: 20px; height: 20px; border-radius: 999px; background: #FFF;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .15s;
+  }
+  .switch.on { background: var(--primary); }
+  .switch.on::after { transform: translateX(18px); }
+
   .settings-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-top: 1px solid var(--border); }
   .settings-row:first-of-type { border-top: 0; }
   .settings-row .label { font-weight: 500; }
@@ -120,6 +165,41 @@
     <div class="card stat-tile"><div class="label">Sessions</div><div class="value" id="psSessions">0</div><div class="sub">logged so far</div></div>
     <div class="card stat-tile"><div class="label">Avg WPM</div><div class="value" id="psWpm">—</div><div class="sub">trailing average</div></div>
   </div>
+
+  <section class="section">
+    <div class="eyebrow">Annual challenge · <span id="ycYear"></span></div>
+    <h2>How far you go this year.</h2>
+    <div class="card" style="margin-top:14px;">
+      <div class="yc-row">
+        <div class="yc-ring">
+          <svg viewBox="0 0 130 130">
+            <circle class="yc-bg" cx="65" cy="65" r="56"></circle>
+            <circle class="yc-fg" cx="65" cy="65" r="56" stroke-dasharray="351.86" stroke-dashoffset="351.86" id="ycFg"></circle>
+          </svg>
+          <div class="yc-center">
+            <div class="yc-cur" id="ycCur">0</div>
+            <div class="yc-target" id="ycTargetLabel">of 12 books</div>
+          </div>
+        </div>
+        <div class="yc-controls">
+          <div>
+            <label>Goal type</label>
+            <div class="yc-type-toggle" id="ycTypeToggle">
+              <button data-yc-type="books">Books read</button>
+              <button data-yc-type="hours">Hours read</button>
+            </div>
+          </div>
+          <div>
+            <label>Target</label>
+            <div class="yc-target-input">
+              <input type="number" id="ycTarget" min="1" value="12">
+              <span class="muted" id="ycTargetUnit">books</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <section class="section">
     <div class="eyebrow">Reader Persona · this week</div>
@@ -173,15 +253,44 @@
   </section>
 
   <section class="section">
+    <div class="eyebrow">Claude · trust & control</div>
+    <h2>What AI shows up where.</h2>
+    <p class="muted" style="margin-top:4px;">Every AI surface is opt-out. Claude never sees your private shelves or reviews.</p>
+    <div class="card" style="margin-top:14px;" id="aiSettingsCard"></div>
+    <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+      <button class="btn btn-outline btn-sm" id="exportProfileBtn">Export Reader Profile</button>
+      <button class="btn btn-outline btn-sm" id="wipeProfileBtn" style="color:var(--danger); border-color:#F5C6C6;">Wipe Reader Profile</button>
+    </div>
+    <p class="muted" style="font-size:.78rem; margin-top:6px;">Wipe clears history, WPM, session, and streak data. Your shelves, reviews, and custom shelves are kept.</p>
+  </section>
+
+  <section class="section">
     <div class="eyebrow">Settings</div>
     <h2>Tune the habit loop.</h2>
     <div class="card" style="margin-top:14px;">
       <div class="settings-row">
         <div>
-          <div class="label">Daily reading goal</div>
-          <div class="desc">Minutes per day. Drives the ring on Today.</div>
+          <div class="label">Daily goal type</div>
+          <div class="desc">Drives the ring on Today.</div>
+        </div>
+        <div class="yc-type-toggle" id="goalTypeToggle" style="max-width:220px;">
+          <button data-goal-type="minutes">Minutes</button>
+          <button data-goal-type="pages">Pages</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="label">Daily minutes target</div>
+          <div class="desc">Minimum to keep a streak alive.</div>
         </div>
         <input type="number" id="goalInput" min="5" max="240" step="5" value="20">
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="label">Daily pages target</div>
+          <div class="desc">Used when goal type is pages.</div>
+        </div>
+        <input type="number" id="pagesGoalInput" min="1" max="500" step="1" value="20">
       </div>
       <div class="settings-row">
         <div style="flex:1; margin-right:16px;">
@@ -212,10 +321,14 @@
   </div>
 </footer>
 
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
-          getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona, Store, K } = window.Chaptr;
+          getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
+          getYearChallenge, setYearChallenge, getYearChallengeProgress,
+          getAISettings, setAISetting, exportReaderProfile, wipeReaderProfile,
+          getGoalType, setGoalType, getDailyGoalPages, setDailyGoalPages,
+          Store, K } = window.Chaptr;
 
   const LEVEL_COLORS = ['#F4EFE6', 'hsl(150,30%,80%)', 'hsl(150,32%,60%)', 'hsl(150,38%,45%)', '#2D4A3E'];
 
@@ -369,6 +482,81 @@
     document.getElementById('calLongestRun').textContent = longest;
   }
 
+  // --- annual challenge ---
+  const YC_CIRC = 2 * Math.PI * 56;
+  function renderChallenge() {
+    const p = getYearChallengeProgress();
+    document.getElementById('ycYear').textContent = p.year;
+    document.getElementById('ycCur').textContent = p.type === 'hours' ? `${p.current}h` : p.current;
+    document.getElementById('ycTargetLabel').textContent = `of ${p.target} ${p.type === 'hours' ? 'hours' : 'books'}`;
+    document.getElementById('ycFg').setAttribute('stroke-dashoffset', YC_CIRC * (1 - p.pct));
+    document.getElementById('ycTarget').value = p.target;
+    document.getElementById('ycTargetUnit').textContent = p.type === 'hours' ? 'hours' : 'books';
+    document.querySelectorAll('#ycTypeToggle button').forEach(b =>
+      b.classList.toggle('active', b.dataset.ycType === p.type));
+  }
+  function wireChallenge() {
+    document.querySelectorAll('#ycTypeToggle button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setYearChallenge({ type: btn.dataset.ycType });
+        renderChallenge();
+      });
+    });
+    const targetInput = document.getElementById('ycTarget');
+    targetInput.addEventListener('change', () => {
+      setYearChallenge({ target: parseInt(targetInput.value, 10) || 1 });
+      renderChallenge();
+    });
+  }
+
+  // --- AI settings ---
+  const AI_LABELS = [
+    { key: 'coachCard',    name: 'Reading Coach card',    desc: 'Daily nudge on Today, dismissible.' },
+    { key: 'forYou',       name: 'For You feed',          desc: 'Ranked book picks on Library.' },
+    { key: 'askClaude',    name: 'Ask Claude',            desc: 'Natural-language search on Library.' },
+    { key: 'readerPersona',name: 'Reader Persona',        desc: 'The summary at the top of this page.' },
+    { key: 'friendFeed',   name: 'Friend feed',           desc: 'Activity from your circle on Library.' },
+    { key: 'smartShelves', name: 'Smart shelves',         desc: 'Auto-shelved tabs (Quick reads, Stalled, Re-read).' },
+  ];
+  function renderAISettings() {
+    const s = getAISettings();
+    const wrap = document.getElementById('aiSettingsCard');
+    wrap.innerHTML = AI_LABELS.map(l => `
+      <div class="ai-row">
+        <div class="ai-meta">
+          <div class="name">${l.name}</div>
+          <div class="desc">${l.desc}</div>
+        </div>
+        <div class="switch ${s[l.key] ? 'on' : ''}" role="switch" aria-checked="${s[l.key]}" data-ai="${l.key}"></div>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('[data-ai]').forEach(sw => {
+      sw.addEventListener('click', () => {
+        const k = sw.dataset.ai;
+        const cur = getAISettings()[k];
+        setAISetting(k, !cur);
+        sw.classList.toggle('on', !cur);
+        sw.setAttribute('aria-checked', String(!cur));
+      });
+    });
+  }
+  function wireExportWipe() {
+    document.getElementById('exportProfileBtn').addEventListener('click', () => {
+      const data = exportReaderProfile();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `chaptr-reader-profile-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    document.getElementById('wipeProfileBtn').addEventListener('click', () => {
+      if (!confirm('Wipe history, WPM, session and streak data? Shelves and reviews are kept.')) return;
+      wipeReaderProfile();
+      location.reload();
+    });
+  }
+
   // --- settings ---
   function wireSettings() {
     const goalInput = document.getElementById('goalInput');
@@ -378,6 +566,21 @@
       goalInput.value = v;
       Store.set(K.dailyGoalMin, v);
     });
+    const pagesInput = document.getElementById('pagesGoalInput');
+    pagesInput.value = getDailyGoalPages();
+    pagesInput.addEventListener('change', () => {
+      setDailyGoalPages(parseInt(pagesInput.value, 10) || 20);
+      pagesInput.value = getDailyGoalPages();
+    });
+    function refreshGoalType() {
+      const t = getGoalType();
+      document.querySelectorAll('#goalTypeToggle button').forEach(b =>
+        b.classList.toggle('active', b.dataset.goalType === t));
+    }
+    document.querySelectorAll('#goalTypeToggle button').forEach(btn => {
+      btn.addEventListener('click', () => { setGoalType(btn.dataset.goalType); refreshGoalType(); });
+    });
+    refreshGoalType();
     const workerInput = document.getElementById('workerInput');
     const workerStatus = document.getElementById('workerStatus');
     workerInput.value = Store.get('chaptr.workerUrl', '');
@@ -395,10 +598,15 @@
   }
 
   renderStats();
-  renderPersona();
+  renderChallenge();
+  wireChallenge();
+  if (getAISettings().readerPersona) renderPersona();
+  else { document.getElementById('personaText').textContent = 'Reader Persona is off.'; document.getElementById('personaSignals').textContent = ''; }
   renderCalendar();
   renderGenreBars();
   renderMoods();
+  renderAISettings();
+  wireExportWipe();
   wireSettings();
 </script>
 </body>

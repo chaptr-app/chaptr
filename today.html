@@ -368,6 +368,8 @@
         <div class="eyebrow"><span class="coach-dot"></span> Reading Coach</div>
         <p id="coachText"></p>
         <div class="signals">Based on: <span id="coachSignals"></span></div>
+        <button class="btn btn-outline btn-sm" id="coachMore" style="margin-top:10px;">Tell me more →</button>
+        <div id="coachMoreOut" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--border); font-family:var(--serif); color:var(--ink);"></div>
       </div>
 
       <div class="card" style="margin-top:18px;">
@@ -416,7 +418,7 @@
   </div>
 </div>
 
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -433,6 +435,8 @@
           getCurrentBookId, setCurrentBookId,
           getBookProgress, setBookProgress,
           getShelves, getCustomBooks,
+          getBookWpm, getGoalType, getDailyGoalPages, getTodayPages,
+          getAISettings, askCoachMore,
           fmtTime, fmtDay, Store, K, OL } = window.Chaptr;
 
   function fmtDuration(mins) {
@@ -476,10 +480,22 @@
     } else {
       freezePill.style.display = 'none';
     }
-    const mins = getTodayMinutes();
-    document.getElementById('ringMinutes').textContent = mins;
-    document.getElementById('ringGoal').textContent = DAILY_GOAL_MIN;
-    const pct = Math.min(1, mins / DAILY_GOAL_MIN);
+    const goalType = getGoalType();
+    let current, target, capLabel;
+    if (goalType === 'pages') {
+      current = getTodayPages();
+      target = getDailyGoalPages();
+      capLabel = 'pages';
+    } else {
+      current = getTodayMinutes();
+      target = DAILY_GOAL_MIN;
+      capLabel = 'min';
+    }
+    document.getElementById('ringMinutes').textContent = current;
+    document.getElementById('ringGoal').textContent = target;
+    const ringCap = document.querySelector('.ring-cap');
+    if (ringCap) ringCap.innerHTML = `of <span id="ringGoal">${target}</span> ${capLabel}`;
+    const pct = target > 0 ? Math.min(1, current / target) : 0;
     document.getElementById('ringFg').setAttribute('stroke-dashoffset', RING_CIRC * (1 - pct));
     const week = getLast14Days().slice(-7).reduce((a, d) => a + d.minutes, 0);
     document.getElementById('totalThisWeek').textContent = `${week} min this week`;
@@ -498,7 +514,7 @@
     document.getElementById('ccPct').textContent = pct;
     document.getElementById('ccPage').textContent = currentPage || 0;
     const remainingPages = Math.max(0, b.pages - currentPage);
-    const wpm = Store.get(K.wpm, 250);
+    const wpm = getBookWpm(id);
     const minsLeft = Math.round((remainingPages * 275) / wpm);
     const h = Math.floor(minsLeft / 60); const m = minsLeft % 60;
     const timeLeft = pct >= 100 ? 'Finished!' : minsLeft < 2 ? 'Almost done' : `~${h ? h + 'h ' : ''}${m}m left · your pace`;
@@ -572,15 +588,36 @@
 
   // ---------- coach card ----------
   function renderCoach() {
+    const wrap = document.querySelector('.coach');
+    if (!getAISettings().coachCard) { wrap.style.display = 'none'; return; }
     const dismissed = Store.get('chaptr.coachDismissedDay', null);
     const today = new Date().toISOString().slice(0,10);
-    const wrap = document.querySelector('.coach');
     if (dismissed === today) { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
     const n = pickCoachNudge();
     document.getElementById('coachText').textContent = n.text;
     document.getElementById('coachSignals').textContent = n.signals;
+    document.getElementById('coachMoreOut').style.display = 'none';
+    document.getElementById('coachMoreOut').textContent = '';
   }
+  document.getElementById('coachMore').addEventListener('click', async () => {
+    const btn = document.getElementById('coachMore');
+    const out = document.getElementById('coachMoreOut');
+    const nudgeText = document.getElementById('coachText').textContent;
+    btn.disabled = true; btn.textContent = 'Claude is thinking…';
+    const result = await askCoachMore(nudgeText);
+    btn.disabled = false; btn.textContent = 'Tell me more →';
+    if (result.ok) {
+      out.style.display = '';
+      out.textContent = result.text;
+    } else {
+      out.style.display = '';
+      out.style.fontFamily = 'var(--sans)';
+      out.style.color = 'var(--ink-3)';
+      out.style.fontSize = '.85rem';
+      out.textContent = result.error;
+    }
+  });
   document.getElementById('coachDismiss').addEventListener('click', () => {
     Store.set('chaptr.coachDismissedDay', new Date().toISOString().slice(0,10));
     document.querySelector('.coach').style.display = 'none';
