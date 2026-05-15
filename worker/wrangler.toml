@@ -2,6 +2,18 @@ name = "chaptr-ask"
 main = "index.js"
 compatibility_date = "2024-09-23"
 
-# After deploying, run:
-#   npx wrangler secret put ANTHROPIC_API_KEY
-# Then paste your key at the prompt.
+# After deploying:
+#   npx wrangler secret put ANTHROPIC_API_KEY   # paste your Anthropic key
+#
+# For the V2 sync feature you also need a D1 database:
+#   npx wrangler d1 create chaptr-db            # prints a database_id — paste below
+#   npx wrangler d1 execute chaptr-db --remote --file=schema.sql
+#   npx wrangler deploy
+#
+# Once you've created the D1 database, uncomment the binding block below and
+# replace REPLACE_WITH_DATABASE_ID with the ID wrangler printed for you.
+
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "chaptr-db"
+# database_id = "REPLACE_WITH_DATABASE_ID"

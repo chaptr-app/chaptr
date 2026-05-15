@@ -253,6 +253,38 @@
   </section>
 
   <section class="section">
+    <div class="eyebrow">Cloud sync · V2 preview</div>
+    <h2>Your data, across devices.</h2>
+    <p class="muted" style="margin-top:4px;">Snapshot sync via your Cloudflare Worker. Anonymous device ID for now — real accounts arrive in Phase 1B.</p>
+    <div class="card" style="margin-top:14px;">
+      <div class="settings-row" style="border-top:0;">
+        <div>
+          <div class="label">Status</div>
+          <div class="desc" id="syncStatus">Checking…</div>
+        </div>
+        <span class="pill" id="syncBadge">—</span>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="label">Device ID</div>
+          <div class="desc"><code id="syncDeviceId" style="font-size:.75rem;">—</code></div>
+        </div>
+        <button class="btn btn-outline btn-sm" id="syncCopyId">Copy</button>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="label">Last sync</div>
+          <div class="desc" id="syncWhen">—</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-outline btn-sm" id="syncPullBtn">Pull</button>
+          <button class="btn btn-primary btn-sm" id="syncPushBtn">Push now</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
     <div class="eyebrow">Claude · trust & control</div>
     <h2>What AI shows up where.</h2>
     <p class="muted" style="margin-top:4px;">Every AI surface is opt-out. Claude never sees your private shelves or reviews.</p>
@@ -321,13 +353,14 @@
   </div>
 </footer>
 
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
           getYearChallenge, setYearChallenge, getYearChallengeProgress,
           getAISettings, setAISetting, exportReaderProfile, wipeReaderProfile,
           getGoalType, setGoalType, getDailyGoalPages, setDailyGoalPages,
+          Sync, getDeviceId,
           Store, K } = window.Chaptr;
 
   const LEVEL_COLORS = ['#F4EFE6', 'hsl(150,30%,80%)', 'hsl(150,32%,60%)', 'hsl(150,38%,45%)', '#2D4A3E'];
@@ -482,6 +515,55 @@
     document.getElementById('calLongestRun').textContent = longest;
   }
 
+  // --- cloud sync (V2 Phase 1A) ---
+  function fmtAgo(iso) {
+    if (!iso) return 'never';
+    const ms = Date.now() - new Date(iso).getTime();
+    if (ms < 60000) return 'just now';
+    if (ms < 3600000) return `${Math.round(ms/60000)}m ago`;
+    if (ms < 86400000) return `${Math.round(ms/3600000)}h ago`;
+    return `${Math.round(ms/86400000)}d ago`;
+  }
+  function renderSyncStatus() {
+    const s = Sync.status();
+    document.getElementById('syncDeviceId').textContent = s.deviceId;
+    document.getElementById('syncWhen').textContent =
+      (s.lastSyncAt ? fmtAgo(s.lastSyncAt) : 'never') + (s.lastSyncResult && s.lastSyncResult !== 'ok' ? ' · ' + s.lastSyncResult : '');
+    const badge = document.getElementById('syncBadge');
+    const statusEl = document.getElementById('syncStatus');
+    if (!s.enabled) {
+      badge.textContent = 'Off';
+      statusEl.textContent = 'Set your Worker URL above to enable cloud sync.';
+    } else if (s.lastSyncResult && s.lastSyncResult.startsWith('error')) {
+      badge.textContent = 'Error';
+      statusEl.textContent = 'Last attempt failed. Check the Worker is deployed with D1 bound.';
+    } else {
+      badge.textContent = 'On';
+      statusEl.textContent = 'Auto-syncs after every change. Pull on app boot.';
+    }
+  }
+  function wireSync() {
+    Sync.on(renderSyncStatus);
+    document.getElementById('syncCopyId').addEventListener('click', () => {
+      navigator.clipboard?.writeText(getDeviceId());
+    });
+    document.getElementById('syncPushBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('syncPushBtn');
+      btn.disabled = true; btn.textContent = 'Pushing…';
+      await Sync.pushNow();
+      btn.disabled = false; btn.textContent = 'Push now';
+      renderSyncStatus();
+    });
+    document.getElementById('syncPullBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('syncPullBtn');
+      btn.disabled = true; btn.textContent = 'Pulling…';
+      const res = await Sync.pull();
+      btn.disabled = false; btn.textContent = 'Pull';
+      renderSyncStatus();
+      if (res.ok && res.hydrated) location.reload();
+    });
+  }
+
   // --- annual challenge ---
   const YC_CIRC = 2 * Math.PI * 56;
   function renderChallenge() {
@@ -598,6 +680,8 @@
   }
 
   renderStats();
+  renderSyncStatus();
+  wireSync();
   renderChallenge();
   wireChallenge();
   if (getAISettings().readerPersona) renderPersona();

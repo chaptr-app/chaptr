@@ -11,9 +11,170 @@ const Store = {
       return raw === null ? fallback : JSON.parse(raw);
     } catch { return fallback; }
   },
-  set(key, value) { localStorage.setItem(key, JSON.stringify(value)); },
-  remove(key) { localStorage.removeItem(key); },
+  set(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+    // Notify the Sync layer (defined below). Keys outside our app prefix don't trigger sync.
+    if (typeof Sync !== 'undefined' && key.startsWith('chaptr.') && !Sync._loading) Sync.scheduleSnapshot();
+  },
+  remove(key) {
+    localStorage.removeItem(key);
+    if (typeof Sync !== 'undefined' && key.startsWith('chaptr.') && !Sync._loading) Sync.scheduleSnapshot();
+  },
 };
+
+// ---------- snapshot sync (V2 Phase 1A) ----------
+// Single-blob sync: every chaptr.* localStorage key is serialized into one snapshot
+// and shipped to the Worker. Pull on boot hydrates from server (newest version wins).
+const Sync = {
+  _debounceTimer: null,
+  _loading: false,           // when true, Store.set won't trigger another push
+  _inflight: null,           // current in-flight push promise
+  _lastVersion: 0,
+  _listeners: [],
+
+  // The set of localStorage keys we sync. We intentionally skip deviceId,
+  // ephemeral session timer, and any other non-portable state.
+  SYNC_KEYS: [
+    'chaptr.history', 'chaptr.shelves', 'chaptr.currentBook',
+    'chaptr.dailyGoalMin', 'chaptr.dailyGoalPages', 'chaptr.goalType',
+    'chaptr.wpm', 'chaptr.bookWpm', 'chaptr.bookProgress',
+    'chaptr.reviews', 'chaptr.customBooks', 'chaptr.customShelves',
+    'chaptr.streakFreezes', 'chaptr.upNext', 'chaptr.yearChallenge',
+    'chaptr.aiSettings', 'chaptr.shelfDates',
+    'chaptr.coachDismissedDay',
+  ],
+
+  workerUrl() { return (localStorage.getItem('chaptr.workerUrl') || '').replace(/^"|"$/g, '').replace(/\/+$/, ''); },
+  enabled() { return !!this.workerUrl(); },
+  status() {
+    return {
+      enabled: this.enabled(),
+      lastSyncAt: localStorage.getItem('chaptr.lastSyncAt') || null,
+      lastSyncResult: localStorage.getItem('chaptr.lastSyncResult') || null,
+      version: this._lastVersion,
+      deviceId: getDeviceId(),
+    };
+  },
+  on(fn) { this._listeners.push(fn); return () => { this._listeners = this._listeners.filter(f => f !== fn); }; },
+  _notify() { this._listeners.forEach(fn => { try { fn(this.status()); } catch {} }); },
+
+  buildSnapshot() {
+    const snap = {};
+    for (const k of this.SYNC_KEYS) {
+      const v = localStorage.getItem(k);
+      if (v !== null) snap[k] = v; // store the raw stringified JSON; preserves shape exactly
+    }
+    return snap;
+  },
+
+  applySnapshot(snap) {
+    if (!snap || typeof snap !== 'object') return;
+    this._loading = true;
+    try {
+      for (const k of this.SYNC_KEYS) {
+        if (snap[k] !== undefined) localStorage.setItem(k, snap[k]);
+      }
+    } finally {
+      this._loading = false;
+    }
+  },
+
+  scheduleSnapshot() {
+    if (!this.enabled()) return;
+    if (this._debounceTimer) clearTimeout(this._debounceTimer);
+    this._debounceTimer = setTimeout(() => this.pushNow().catch(() => {}), 1500);
+  },
+
+  async pushNow() {
+    if (!this.enabled()) return { ok: false, error: 'No worker URL configured' };
+    if (this._inflight) return this._inflight;
+    const body = JSON.stringify({ snapshot: this.buildSnapshot() });
+    const url = this.workerUrl() + '/sync';
+    const userId = getDeviceId();
+    this._inflight = fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Chaptr-User': userId },
+      body,
+    }).then(async (resp) => {
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+      this._lastVersion = data.version || 0;
+      localStorage.setItem('chaptr.lastSyncAt', data.updatedAt || new Date().toISOString());
+      localStorage.setItem('chaptr.lastSyncResult', 'ok');
+      this._notify();
+      return { ok: true, version: data.version, updatedAt: data.updatedAt };
+    }).catch((e) => {
+      localStorage.setItem('chaptr.lastSyncResult', 'error: ' + e.message);
+      this._notify();
+      return { ok: false, error: e.message };
+    }).finally(() => { this._inflight = null; });
+    return this._inflight;
+  },
+
+  async pull() {
+    if (!this.enabled()) return { ok: false, error: 'No worker URL configured' };
+    const url = this.workerUrl() + '/load';
+    const userId = getDeviceId();
+    try {
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers: { 'X-Chaptr-User': userId },
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+      if (!data.snapshot) {
+        // Fresh user — push our local state up
+        await this.pushNow();
+        return { ok: true, hydrated: false, version: 0 };
+      }
+      // Apply only if server version is newer. For Phase 1A "newest wins" — we trust the
+      // server because most users have one active device at a time. Phase 2 can add merge.
+      this.applySnapshot(data.snapshot);
+      this._lastVersion = data.version || 0;
+      localStorage.setItem('chaptr.lastSyncAt', data.updatedAt || new Date().toISOString());
+      localStorage.setItem('chaptr.lastSyncResult', 'ok');
+      this._notify();
+      return { ok: true, hydrated: true, version: data.version };
+    } catch (e) {
+      localStorage.setItem('chaptr.lastSyncResult', 'error: ' + e.message);
+      this._notify();
+      return { ok: false, error: e.message };
+    }
+  },
+
+  async ensureUser() {
+    if (!this.enabled()) return null;
+    try {
+      const resp = await fetch(this.workerUrl() + '/me', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Chaptr-User': getDeviceId() },
+      });
+      const data = await resp.json().catch(() => ({}));
+      return resp.ok ? data : null;
+    } catch { return null; }
+  },
+};
+
+// ---------- device id (stable per-browser identifier for sync) ----------
+function genDeviceId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return 'dev_' + crypto.randomUUID().replace(/-/g, '').slice(0, 24);
+  }
+  // Fallback for older browsers
+  const rand = (Math.random().toString(36) + Math.random().toString(36)).replace(/[^a-z0-9]/g, '').slice(0, 24);
+  return 'dev_' + rand;
+}
+function getDeviceId() {
+  let id = localStorage.getItem('chaptr.deviceId');
+  if (!id) {
+    id = genDeviceId();
+    localStorage.setItem('chaptr.deviceId', id);
+  } else {
+    // Strip JSON quoting if a previous version stored it via Store.set
+    try { const parsed = JSON.parse(id); if (typeof parsed === 'string') id = parsed; } catch {}
+  }
+  return id;
+}
 
 const K = {
   session: 'chaptr.session',
@@ -975,6 +1136,12 @@ function bootCommon() {
   try { startBackgroundPauseWatcher(); } catch {}
   mountBottomNav();
   mountNowReadingPill();
+  // Kick off backend sync if configured. Runs in background — UI doesn't wait.
+  try {
+    if (Sync.enabled()) {
+      Sync.ensureUser().then(() => Sync.pull()).catch(() => {});
+    }
+  } catch {}
 }
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootCommon);
@@ -1032,6 +1199,7 @@ window.Chaptr = {
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
   attachSwipe, mountBottomNav, mountNowReadingPill,
+  Sync, getDeviceId,
   OL,
 };
 
