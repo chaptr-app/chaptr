@@ -60,3 +60,17 @@ CREATE TABLE IF NOT EXISTS book_finishes (
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 CREATE INDEX IF NOT EXISTS idx_finishes_book ON book_finishes(book_id);
+
+-- Phase 3E — shared custom shelves. Private shelves live only in the client's
+-- snapshot; friends + public are mirrored here so other users can read them.
+CREATE TABLE IF NOT EXISTS custom_shelves (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  books TEXT NOT NULL,                -- JSON array of bookIds
+  visibility TEXT NOT NULL DEFAULT 'public',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (owner_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_shelves_owner_vis ON custom_shelves(owner_id, visibility);

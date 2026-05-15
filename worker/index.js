@@ -249,6 +249,34 @@ async function ensureSchema(env) {
     )
   `).run();
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_finishes_book ON book_finishes(book_id)`).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS custom_shelves (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      books TEXT NOT NULL,
+      visibility TEXT NOT NULL DEFAULT 'public',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_shelves_owner_vis ON custom_shelves(owner_id, visibility)`).run();
+}
+
+// Helper: is requester (or anonymous) allowed to view a row with this visibility owned by ownerId?
+async function canViewVisibility(env, requesterId, ownerId, visibility) {
+  if (visibility === 'public') return true;
+  if (!requesterId) return false;
+  if (requesterId === ownerId) return true;
+  if (visibility !== 'friends') return false;
+  // friends = either side follows the other
+  const row = await env.DB.prepare(`
+    SELECT 1 FROM follows
+    WHERE (follower_id = ? AND followee_id = ?)
+       OR (follower_id = ? AND followee_id = ?)
+    LIMIT 1
+  `).bind(requesterId, ownerId, ownerId, requesterId).first();
+  return !!row;
 }
 
 async function handleMe(request, env) {
@@ -640,6 +668,106 @@ async function handleTrending(request, env) {
   });
 }
 
+// ---------- Custom shelves (Phase 3E) ----------
+const SHELF_ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
+
+async function handleShelfUpsert(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { id, name, books, visibility } = body || {};
+  if (!id || !SHELF_ID_RE.test(id)) return json({ error: 'Bad shelf id' }, 400);
+  if (!name || typeof name !== 'string') return json({ error: 'Missing name' }, 400);
+  const cleanName = String(name).slice(0, 80);
+  const arr = Array.isArray(books) ? books.filter(b => typeof b === 'string').slice(0, 500) : [];
+  const v = VISIBILITY.has(visibility) ? visibility : 'public';
+  if (v === 'private') return json({ error: 'Private shelves stay local; do not upload.' }, 400);
+
+  await ensureSchema(env);
+  const now = new Date().toISOString();
+  // Ownership check: if a row with this id exists owned by someone else, refuse.
+  const existing = await env.DB.prepare('SELECT owner_id, created_at FROM custom_shelves WHERE id = ?').bind(id).first();
+  if (existing && existing.owner_id !== userId) return json({ error: 'Shelf belongs to another user' }, 403);
+  const createdAt = existing?.created_at || now;
+  await env.DB.prepare(`
+    INSERT INTO custom_shelves (id, owner_id, name, books, visibility, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      books = excluded.books,
+      visibility = excluded.visibility,
+      updated_at = excluded.updated_at
+  `).bind(id, userId, cleanName, JSON.stringify(arr), v, createdAt, now).run();
+  return json({ ok: true, id, visibility: v, updatedAt: now });
+}
+
+async function handleShelfDelete(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  const url = new URL(request.url);
+  const id = url.searchParams.get('id');
+  if (!id || !SHELF_ID_RE.test(id)) return json({ error: 'Bad shelf id' }, 400);
+  await ensureSchema(env);
+  await env.DB.prepare('DELETE FROM custom_shelves WHERE id = ? AND owner_id = ?').bind(id, userId).run();
+  return json({ ok: true });
+}
+
+async function handleUserShelves(request, env, username) {
+  if (!username || !USERNAME_RE.test(username)) return json({ error: 'Bad username' }, 400);
+  const { userId: requesterId } = await resolveUserId(request, env);
+  await ensureSchema(env);
+  const owner = await env.DB.prepare(
+    'SELECT id, username, display_name, avatar_hue FROM users WHERE username = ?'
+  ).bind(username).first();
+  if (!owner) return json({ error: 'Not found' }, 404);
+  const rows = await env.DB.prepare(`
+    SELECT id, name, books, visibility, updated_at FROM custom_shelves
+    WHERE owner_id = ? ORDER BY updated_at DESC
+  `).bind(owner.id).all();
+  const shelves = [];
+  for (const r of (rows?.results || [])) {
+    if (await canViewVisibility(env, requesterId, owner.id, r.visibility)) {
+      let books = [];
+      try { books = JSON.parse(r.books); } catch {}
+      shelves.push({
+        id: r.id, name: r.name, books, visibility: r.visibility, updatedAt: r.updated_at,
+      });
+    }
+  }
+  return json({
+    profile: publicProfile(owner),
+    shelves,
+  });
+}
+
+async function handleUserReviews(request, env, username) {
+  if (!username || !USERNAME_RE.test(username)) return json({ error: 'Bad username' }, 400);
+  const { userId: requesterId } = await resolveUserId(request, env);
+  await ensureSchema(env);
+  const owner = await env.DB.prepare(
+    'SELECT id, username, display_name, avatar_hue FROM users WHERE username = ?'
+  ).bind(username).first();
+  if (!owner) return json({ error: 'Not found' }, 404);
+  const rows = await env.DB.prepare(`
+    SELECT book_id, rating, text, visibility, updated_at
+    FROM reviews
+    WHERE user_id = ?
+    ORDER BY updated_at DESC
+    LIMIT 100
+  `).bind(owner.id).all();
+  const reviews = [];
+  for (const r of (rows?.results || [])) {
+    if (await canViewVisibility(env, requesterId, owner.id, r.visibility)) {
+      reviews.push({
+        bookId: r.book_id, rating: r.rating, text: r.text,
+        visibility: r.visibility, updatedAt: r.updated_at,
+      });
+    }
+  }
+  return json({ profile: publicProfile(owner), reviews });
+}
+
 // Recent public reviews — anonymous, no auth required. Useful for a community feed later.
 async function handleReviewsPublic(request, env) {
   const url = new URL(request.url);
@@ -698,6 +826,14 @@ export default {
     if (path === '/feed' && request.method === 'GET') return handleFeed(request, env);
     const userProfileMatch = path.match(/^\/users\/([^/]+)$/);
     if (userProfileMatch && request.method === 'GET') return handleUserPublicProfile(request, env, decodeURIComponent(userProfileMatch[1]).toLowerCase());
+    const userShelvesMatch = path.match(/^\/users\/([^/]+)\/shelves$/);
+    if (userShelvesMatch && request.method === 'GET') return handleUserShelves(request, env, decodeURIComponent(userShelvesMatch[1]).toLowerCase());
+    const userReviewsMatch = path.match(/^\/users\/([^/]+)\/reviews$/);
+    if (userReviewsMatch && request.method === 'GET') return handleUserReviews(request, env, decodeURIComponent(userReviewsMatch[1]).toLowerCase());
+
+    // Shelves (Phase 3E)
+    if (path === '/shelves' && request.method === 'POST') return handleShelfUpsert(request, env);
+    if (path === '/shelves' && request.method === 'DELETE') return handleShelfDelete(request, env);
 
     if (path === '/health') {
       return json({

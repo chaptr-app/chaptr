@@ -1223,13 +1223,14 @@ function listCustomShelves() {
   return Object.values(getCustomShelves()).sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
 }
 function getCustomShelf(id) { return getCustomShelves()[id] || null; }
-function createCustomShelf(name) {
+function createCustomShelf(name, visibility = 'private') {
   const clean = (name || '').trim();
   if (!clean) return null;
   const id = 's_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
   const m = getCustomShelves();
-  m[id] = { id, name: clean, createdAt: new Date().toISOString(), books: [] };
+  m[id] = { id, name: clean, visibility, createdAt: new Date().toISOString(), books: [] };
   setCustomShelvesMap(m);
+  try { ShelvesBackend.upsert(m[id]); } catch {}
   return m[id];
 }
 function renameCustomShelf(id, name) {
@@ -1237,24 +1238,87 @@ function renameCustomShelf(id, name) {
   if (!m[id]) return;
   m[id].name = (name || '').trim() || m[id].name;
   setCustomShelvesMap(m);
+  try { ShelvesBackend.upsert(m[id]); } catch {}
+}
+function setCustomShelfVisibility(id, visibility) {
+  const m = getCustomShelves();
+  if (!m[id]) return;
+  const prev = m[id].visibility || 'private';
+  m[id].visibility = visibility;
+  setCustomShelvesMap(m);
+  try {
+    if (visibility === 'private' && prev !== 'private') ShelvesBackend.delete(id);
+    else ShelvesBackend.upsert(m[id]);
+  } catch {}
 }
 function deleteCustomShelf(id) {
   const m = getCustomShelves();
   delete m[id];
   setCustomShelvesMap(m);
+  try { ShelvesBackend.delete(id); } catch {}
 }
 function addToCustomShelf(shelfId, bookId) {
   const m = getCustomShelves();
   if (!m[shelfId] || m[shelfId].books.includes(bookId)) return;
   m[shelfId].books.push(bookId);
   setCustomShelvesMap(m);
+  try { ShelvesBackend.upsert(m[shelfId]); } catch {}
 }
 function removeFromCustomShelf(shelfId, bookId) {
   const m = getCustomShelves();
   if (!m[shelfId]) return;
   m[shelfId].books = m[shelfId].books.filter(b => b !== bookId);
   setCustomShelvesMap(m);
+  try { ShelvesBackend.upsert(m[shelfId]); } catch {}
 }
+
+// Backend mirror for non-private custom shelves.
+const ShelvesBackend = {
+  async upsert(shelf) {
+    if (!shelf || shelf.visibility === 'private' || !shelf.visibility) return;
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) return;
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return;
+    try {
+      await fetch(Sync.workerUrl() + '/shelves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await Sync.authHeaders()) },
+        body: JSON.stringify({
+          id: shelf.id, name: shelf.name, books: shelf.books || [], visibility: shelf.visibility,
+        }),
+      });
+    } catch {}
+  },
+  async delete(id) {
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) return;
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return;
+    try {
+      await fetch(Sync.workerUrl() + '/shelves?id=' + encodeURIComponent(id), {
+        method: 'DELETE',
+        headers: await Sync.authHeaders(),
+      });
+    } catch {}
+  },
+  async fetchUserShelves(username) {
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return null;
+    try {
+      const resp = await fetch(Sync.workerUrl() + '/users/' + encodeURIComponent(username) + '/shelves', {
+        headers: await Sync.authHeaders(),
+      });
+      const data = await resp.json().catch(() => ({}));
+      return resp.ok ? data : null;
+    } catch { return null; }
+  },
+  async fetchUserReviews(username) {
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return null;
+    try {
+      const resp = await fetch(Sync.workerUrl() + '/users/' + encodeURIComponent(username) + '/reviews', {
+        headers: await Sync.authHeaders(),
+      });
+      const data = await resp.json().catch(() => ({}));
+      return resp.ok ? data : null;
+    } catch { return null; }
+  },
+};
 function customShelvesContaining(bookId) {
   return listCustomShelves().filter(s => s.books.includes(bookId));
 }
@@ -1563,7 +1627,8 @@ window.Chaptr = {
   getShelfDates,
   getShelves, setShelves, shelfFor, moveToShelf,
   listCustomShelves, getCustomShelf, createCustomShelf, renameCustomShelf, deleteCustomShelf,
-  addToCustomShelf, removeFromCustomShelf, customShelvesContaining,
+  setCustomShelfVisibility, addToCustomShelf, removeFromCustomShelf, customShelvesContaining,
+  ShelvesBackend,
   getCurrentBookId, setCurrentBookId,
   getBookProgress, setBookProgress,
   getReviews, getReview, setReview, ReviewsBackend, Social, Stats, renderSpoilers,

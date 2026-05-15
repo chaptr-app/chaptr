@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF7F2">
+<title>Reader · Chaptr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=4">
+<style>
+  .u-head { display: grid; grid-template-columns: 88px 1fr auto; gap: 18px; align-items: center; margin-top: 32px; }
+  @media (max-width: 720px) { .u-head { grid-template-columns: 64px 1fr; } .u-head .actions { grid-column: 1 / -1; } }
+  .u-avatar {
+    width: 88px; height: 88px; border-radius: 999px;
+    display: grid; place-items: center; color: #FFF;
+    font-family: var(--serif); font-size: 2.2rem; font-weight: 600;
+  }
+  @media (max-width: 720px) { .u-avatar { width: 64px; height: 64px; font-size: 1.6rem; } }
+  .u-name h1 { margin: 0 0 4px; font-size: clamp(1.6rem, 4vw, 2.2rem); }
+  .u-handle { color: var(--ink-3); font-family: monospace; font-size: .9rem; }
+  .u-stats { display: flex; gap: 18px; margin-top: 24px; flex-wrap: wrap; }
+  .u-stat { padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .u-stat .v { font-family: var(--serif); font-size: 1.6rem; color: var(--ink); }
+  .u-stat .l { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-top: 2px; }
+
+  .empty-state { padding: 30px 16px; text-align: center; color: var(--ink-3); border: 1px dashed var(--border); border-radius: var(--r-md); }
+
+  .reviews-list { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+  .rv-row {
+    display: grid; grid-template-columns: 48px 1fr; gap: 14px; padding: 14px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+  }
+  .rv-row .cv { width: 48px; height: 70px; border-radius: 4px; box-shadow: var(--shadow-sm); background-size: cover !important; background-position: center !important; }
+  .rv-row .t { font-family: var(--serif); font-size: 1.05rem; }
+  .rv-row .meta { color: var(--ink-3); font-size: .82rem; }
+  .rv-row .stars { color: var(--accent); margin-top: 4px; }
+  .rv-row .qt { color: var(--ink-2); font-style: italic; margin-top: 6px; font-size: .9rem; }
+  .rv-row .when { color: var(--ink-3); font-size: .78rem; margin-top: 4px; }
+  .rv-row .vis-badge { font-size: .68rem; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+
+  .shelves-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin-top: 14px; }
+  .sh-card { padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .sh-card .nm { font-family: var(--serif); font-size: 1.05rem; margin-bottom: 6px; }
+  .sh-card .preview { display: flex; margin-top: 8px; }
+  .sh-card .mini { width: 28px; height: 40px; border-radius: 3px; box-shadow: var(--shadow-sm); margin-left: -6px; border: 2px solid var(--surface); background-size: cover !important; background-position: center !important; }
+  .sh-card .mini:first-child { margin-left: 0; }
+  .sh-card .cnt { font-family: var(--serif); font-size: 1.8rem; line-height: 1; }
+  .sh-card .lbl { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-top: 4px; }
+
+  .err-banner { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; padding: 14px 18px; border-radius: var(--r-md); margin: 24px 0; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">C</span> Chaptr
+    </a>
+    <div class="nav-links">
+      <a href="today.html">Today</a>
+      <a href="library.html">Library</a>
+      <a href="shelves.html">Shelves</a>
+      <a href="profile.html">Profile</a>
+    </div>
+    <div class="nav-cta">
+      <a href="library.html" class="btn btn-ghost btn-sm hide-sm">Back to Library</a>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+
+  <div id="userMain" style="display:none;">
+    <section class="u-head">
+      <div class="u-avatar" id="uAvatar">–</div>
+      <div class="u-name">
+        <h1 id="uName">Reader</h1>
+        <div class="u-handle">@<span id="uHandle">reader</span></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary btn-sm" id="uFollowBtn" style="display:none;">Follow</button>
+      </div>
+    </section>
+
+    <div class="u-stats">
+      <div class="u-stat"><div class="v" id="uReviewCount">0</div><div class="l">Public reviews</div></div>
+      <div class="u-stat"><div class="v" id="uShelfCount">0</div><div class="l">Public shelves</div></div>
+    </div>
+
+    <section style="margin-top:32px;">
+      <div class="eyebrow">Public shelves</div>
+      <h2 style="margin:6px 0 0;">What they've curated.</h2>
+      <div id="uShelves"></div>
+    </section>
+
+    <section style="margin-top:32px;">
+      <div class="eyebrow">Public reviews</div>
+      <h2 style="margin:6px 0 0;">What they thought.</h2>
+      <div id="uReviews"></div>
+    </section>
+  </div>
+
+  <div id="userError" class="err-banner" style="display:none;"></div>
+
+</main>
+
+<footer class="footer">
+  <div class="container row">
+    <span>© Chaptr — a prototype.</span>
+    <span class="muted">Time is the new star rating.</span>
+  </div>
+</footer>
+
+<script src="app.js?v=24"></script>
+<script>
+  const { findBook, OL, Auth, Sync, Social, ShelvesBackend, renderSpoilers, hashHue } = window.Chaptr;
+
+  const params = new URLSearchParams(location.search);
+  const username = (params.get('u') || '').trim().toLowerCase();
+
+  function showError(msg) {
+    document.getElementById('userError').style.display = '';
+    document.getElementById('userError').textContent = msg;
+  }
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function initials(name, handle) {
+    const src = (name || handle || 'R').trim();
+    const parts = src.split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return src.slice(0, 2).toUpperCase();
+  }
+  function starString(rating) {
+    if (!rating) return '';
+    const full = Math.floor(rating);
+    const half = (rating - full) >= 0.5;
+    return '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(5 - full - (half ? 1 : 0));
+  }
+  function fmtAgo(iso) {
+    if (!iso) return '';
+    const ms = Date.now() - new Date(iso).getTime();
+    if (ms < 3600000) return `${Math.round(ms / 60000)}m ago`;
+    if (ms < 86400000) return `${Math.round(ms / 3600000)}h ago`;
+    return `${Math.round(ms / 86400000)}d ago`;
+  }
+  async function bootstrap() {
+    if (!username) { showError('No username in URL. Try ?u=someone'); return; }
+    // Load Auth in the background so the Follow button can hydrate.
+    if (Auth.configured()) Auth.load().catch(() => {});
+
+    const shelvesData = await ShelvesBackend.fetchUserShelves(username);
+    const reviewsData = await ShelvesBackend.fetchUserReviews(username);
+    const data = shelvesData || reviewsData;
+    if (!data?.profile) { showError(`No reader found at @${escapeHtml(username)}.`); return; }
+    document.getElementById('userMain').style.display = '';
+
+    const p = data.profile;
+    document.title = (p.displayName || p.username) + ' · Chaptr';
+    document.getElementById('uName').textContent = p.displayName || p.username || 'Reader';
+    document.getElementById('uHandle').textContent = p.username || username;
+    const hue = p.avatarHue ?? hashHue(p.username || '');
+    const av = document.getElementById('uAvatar');
+    av.style.background = `linear-gradient(135deg, hsl(${hue},45%,40%), hsl(${(hue+40)%360},55%,55%))`;
+    av.textContent = initials(p.displayName, p.username);
+
+    const shelves = shelvesData?.shelves || [];
+    const reviews = reviewsData?.reviews || [];
+    document.getElementById('uShelfCount').textContent = shelves.length;
+    document.getElementById('uReviewCount').textContent = reviews.length;
+
+    renderShelves(shelves);
+    renderReviews(reviews);
+    wireFollow(p);
+  }
+
+  function renderShelves(shelves) {
+    const wrap = document.getElementById('uShelves');
+    if (!shelves.length) {
+      wrap.innerHTML = `<div class="empty-state" style="margin-top:14px;">No public shelves yet.</div>`;
+      return;
+    }
+    wrap.innerHTML = `<div class="shelves-grid">${shelves.map((s, i) => {
+      const previews = s.books.slice(0, 4).map((id, ix) => `<div class="mini" data-sh="${i}" data-ix="${ix}"></div>`).join('');
+      return `<div class="sh-card">
+        <div class="nm">${escapeHtml(s.name)}</div>
+        <div class="cnt">${s.books.length}</div>
+        <div class="lbl">book${s.books.length === 1 ? '' : 's'}${s.visibility === 'friends' ? ' · friends only' : ''}</div>
+        <div class="preview">${previews || '<span class="muted" style="font-size:.85rem;">Empty</span>'}</div>
+      </div>`;
+    }).join('')}</div>`;
+    shelves.forEach((s, i) => {
+      s.books.slice(0, 4).forEach((id, ix) => {
+        const node = wrap.querySelector(`[data-sh="${i}"][data-ix="${ix}"]`);
+        if (node) OL.applyCover(node, findBook(id), 'S');
+      });
+    });
+  }
+
+  function renderReviews(reviews) {
+    const wrap = document.getElementById('uReviews');
+    if (!reviews.length) {
+      wrap.innerHTML = `<div class="empty-state" style="margin-top:14px;">No reviews shared yet.</div>`;
+      return;
+    }
+    wrap.innerHTML = `<div class="reviews-list">${reviews.map((r, i) => {
+      const b = findBook(r.bookId);
+      return `<div class="rv-row">
+        <div class="cv" data-rv="${i}"></div>
+        <div>
+          <div class="t">${escapeHtml(b.title)}</div>
+          <div class="meta">${escapeHtml(b.author)} · ${b.genre} · ${b.pages}p</div>
+          ${r.rating ? `<div class="stars">${starString(r.rating)}</div>` : ''}
+          ${r.text ? `<div class="qt">"${renderSpoilers(r.text)}"</div>` : ''}
+          <div class="when">${fmtAgo(r.updatedAt)}${r.visibility === 'friends' ? ' · <span class="vis-badge">friends only</span>' : ''}</div>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+    reviews.forEach((r, i) => {
+      const node = wrap.querySelector(`[data-rv="${i}"]`);
+      if (node) OL.applyCover(node, findBook(r.bookId), 'S');
+    });
+  }
+
+  async function wireFollow(profile) {
+    // Hide Follow if it's your own profile or you're signed out.
+    if (!Auth.configured()) return;
+    // Wait for Clerk to finish loading before checking signed-in state.
+    await Auth.load().catch(() => {});
+    if (!Auth.signedIn()) return;
+    const myProfile = await Social.getMyProfile();
+    if (myProfile?.username && myProfile.username === profile.username) return;
+
+    const btn = document.getElementById('uFollowBtn');
+    btn.style.display = '';
+    let following = false;
+    try {
+      const follows = await Social.getMyFollows();
+      following = !!(follows.following || []).find(f => f.username === profile.username);
+    } catch {}
+    function paint() {
+      btn.textContent = following ? 'Following' : 'Follow';
+      btn.className = following ? 'btn btn-outline btn-sm' : 'btn btn-primary btn-sm';
+    }
+    paint();
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        if (following) { await Social.unfollow(profile.username); following = false; }
+        else { await Social.follow(profile.username); following = true; }
+        paint();
+        Social.invalidateFeed();
+      } catch (e) { btn.textContent = 'Error: ' + e.message; }
+      finally { btn.disabled = false; }
+    });
+  }
+
+  bootstrap().catch(e => showError('Failed to load: ' + e.message));
+</script>
+</body>
+</html>

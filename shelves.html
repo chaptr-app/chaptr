@@ -204,6 +204,15 @@
     <div class="eyebrow">Edit shelf</div>
     <h3 style="margin:0 0 12px;" id="editShelfTitle">Shelf</h3>
     <input class="new-shelf-input" id="editShelfName" placeholder="Shelf name">
+    <div style="margin-top:14px;">
+      <label style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600;">Visibility</label>
+      <div class="yc-type-toggle" id="editShelfVisibility" style="margin-top:6px;">
+        <button data-vis="private">🔒 Private</button>
+        <button data-vis="friends">👥 Friends</button>
+        <button data-vis="public">🌍 Public</button>
+      </div>
+      <div class="muted" id="editShelfVisHint" style="font-size:.78rem; margin-top:6px;">Private shelves never leave this device.</div>
+    </div>
     <div class="dlg-actions">
       <button class="btn btn-ghost btn-sm danger" id="deleteShelfBtn" style="color:var(--danger);">Delete shelf</button>
       <div class="right">
@@ -255,12 +264,13 @@
   </div>
 </footer>
 
-<script src="app.js?v=23"></script>
+<script src="app.js?v=24"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
           listCustomShelves, getCustomShelf, createCustomShelf, renameCustomShelf,
-          deleteCustomShelf, addToCustomShelf, removeFromCustomShelf,
+          deleteCustomShelf, setCustomShelfVisibility,
+          addToCustomShelf, removeFromCustomShelf,
           customShelvesContaining,
           getSmartShelves, getSmartShelfById, isSmartShelfId,
           renderSpoilers } = window.Chaptr;
@@ -348,10 +358,17 @@
   function renderHeader() {
     const meta = getActiveShelfMeta();
     document.getElementById('shelfName').textContent = meta.name;
-    document.getElementById('shelfDesc').textContent = meta.desc;
+    let desc = meta.desc;
+    if (meta.custom) {
+      const sh = getCustomShelf(activeShelf);
+      const vis = sh?.visibility || 'private';
+      const visIcon = vis === 'public' ? '🌍 Public' : vis === 'friends' ? '👥 Friends' : '🔒 Private';
+      desc = meta.desc + ' · ' + visIcon;
+    }
+    document.getElementById('shelfDesc').textContent = desc;
     const actions = document.getElementById('shelfActions');
     if (meta.custom) {
-      actions.innerHTML = `<button class="icon-btn" id="editShelfOpen">Rename or delete</button>`;
+      actions.innerHTML = `<button class="icon-btn" id="editShelfOpen">Edit shelf</button>`;
       document.getElementById('editShelfOpen').addEventListener('click', () => openEditShelf(activeShelf));
     } else {
       actions.innerHTML = '';
@@ -583,12 +600,29 @@
   // ---------- edit shelf dialog (rename + delete) ----------
   const editDlg = document.getElementById('editShelfDlg');
   let editShelfId = null;
+  const SHELF_VIS_HINTS = {
+    private: "Only you. Never uploaded.",
+    friends: "You and people you follow (or who follow you).",
+    public:  "Anyone with the link — appears on your profile.",
+  };
+  let editShelfVis = 'private';
+  function paintEditShelfVis() {
+    document.querySelectorAll('#editShelfVisibility button').forEach(b =>
+      b.classList.toggle('active', b.dataset.vis === editShelfVis));
+    document.getElementById('editShelfVisHint').textContent = SHELF_VIS_HINTS[editShelfVis];
+  }
+  document.querySelectorAll('#editShelfVisibility button').forEach(btn => {
+    btn.addEventListener('click', () => { editShelfVis = btn.dataset.vis; paintEditShelfVis(); });
+  });
+
   function openEditShelf(id) {
     editShelfId = id;
     const sh = getCustomShelf(id);
     if (!sh) return;
+    editShelfVis = sh.visibility || 'private';
     document.getElementById('editShelfTitle').textContent = sh.name;
     document.getElementById('editShelfName').value = sh.name;
+    paintEditShelfVis();
     editDlg.classList.add('open');
     setTimeout(() => document.getElementById('editShelfName').focus(), 50);
   }
@@ -598,6 +632,7 @@
     if (!editShelfId) return;
     const newName = document.getElementById('editShelfName').value.trim();
     if (newName) renameCustomShelf(editShelfId, newName);
+    setCustomShelfVisibility(editShelfId, editShelfVis);
     editDlg.classList.remove('open');
     renderAll();
   });

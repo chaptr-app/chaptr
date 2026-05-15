@@ -255,7 +255,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=23"></script>
+<script src="app.js?v=24"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
@@ -681,17 +681,23 @@
 
     el.innerHTML = items.map((it, i) => {
       const b = findBook(it.bookId);
-      let f;
+      let f, link = null;
       if (it.isYou) f = { name: 'You', initials: 'Y', hue: 160 };
-      else if (it.isReal) f = { name: it.friend, initials: (it.friend[0] || 'R').toUpperCase(), hue: it.hue ?? 160 };
-      else f = friendByName(it.friend);
+      else if (it.isReal) {
+        f = { name: it.friend, initials: (it.friend[0] || 'R').toUpperCase(), hue: it.hue ?? 160 };
+        if (it.username) link = `user.html?u=${encodeURIComponent(it.username)}`;
+      } else f = friendByName(it.friend);
       const avatarBg = `linear-gradient(135deg, hsl(${f.hue},45%,40%), hsl(${(f.hue+40)%360},55%,55%))`;
       const noteHtml = it.note ? `<div class="note">"${renderSpoilers(it.note)}"</div>` : '';
+      const whoHtml = link
+        ? `<a class="who" href="${link}" style="color:var(--ink); text-decoration:none;">${f.name}</a>`
+        : `<span class="who">${f.name}</span>`;
       return `<div class="feed-item ${it.isYou ? 'you' : ''}">
-        <div class="avatar-sm" style="background:${avatarBg};">${f.initials}</div>
+        ${link ? `<a href="${link}" style="line-height:0;"><div class="avatar-sm" style="background:${avatarBg};">${f.initials}</div></a>`
+               : `<div class="avatar-sm" style="background:${avatarBg};">${f.initials}</div>`}
         <div class="feed-cover" data-feed-cover="${i}"></div>
         <div>
-          <span class="who">${f.name}</span>
+          ${whoHtml}
           <span class="verb">${it.verb}</span>
           <span class="what">${b.title}</span>
           ${it.rating ? `<span class="stars">${starString(it.rating)}</span>` : ''}
