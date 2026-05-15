@@ -205,6 +205,19 @@ async function ensureSchema(env) {
       last_seen_at TEXT NOT NULL
     )
   `).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS reviews (
+      user_id TEXT NOT NULL,
+      book_id TEXT NOT NULL,
+      rating REAL,
+      text TEXT,
+      visibility TEXT NOT NULL DEFAULT 'private',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, book_id)
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_reviews_book_public ON reviews(book_id, visibility)`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id, updated_at DESC)`).run();
 }
 
 async function handleMe(request, env) {
@@ -269,6 +282,98 @@ async function handleSync(request, env) {
   return json({ ok: true, version: newVersion, updatedAt: now });
 }
 
+// ---------- Reviews (Phase 2A) ----------
+const VISIBILITY = new Set(['private', 'friends', 'public']);
+
+async function handleReviewUpsert(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { bookId, rating, text, visibility } = body || {};
+  if (!bookId || typeof bookId !== 'string' || bookId.length > 128) return json({ error: 'Missing or bad bookId' }, 400);
+  if (rating !== null && rating !== undefined && (typeof rating !== 'number' || rating < 0 || rating > 5)) {
+    return json({ error: 'rating must be 0-5 or null' }, 400);
+  }
+  const cleanText = (text === null || text === undefined) ? null : String(text).slice(0, 5000);
+  const v = VISIBILITY.has(visibility) ? visibility : 'private';
+  // If review is effectively empty, delete it
+  if ((rating === null || rating === undefined) && !cleanText) {
+    await ensureSchema(env);
+    await env.DB.prepare('DELETE FROM reviews WHERE user_id = ? AND book_id = ?').bind(userId, bookId).run();
+    return json({ ok: true, deleted: true });
+  }
+  await ensureSchema(env);
+  const now = new Date().toISOString();
+  await env.DB.prepare(`
+    INSERT INTO reviews (user_id, book_id, rating, text, visibility, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, book_id) DO UPDATE SET
+      rating = excluded.rating,
+      text = excluded.text,
+      visibility = excluded.visibility,
+      updated_at = excluded.updated_at
+  `).bind(userId, bookId, rating ?? null, cleanText, v, now).run();
+  return json({ ok: true, bookId, visibility: v, updatedAt: now });
+}
+
+async function handleReviewDelete(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  const url = new URL(request.url);
+  const bookId = url.searchParams.get('bookId');
+  if (!bookId) return json({ error: 'Missing bookId' }, 400);
+  await ensureSchema(env);
+  await env.DB.prepare('DELETE FROM reviews WHERE user_id = ? AND book_id = ?').bind(userId, bookId).run();
+  return json({ ok: true });
+}
+
+async function handleReviewsMine(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  await ensureSchema(env);
+  const rows = await env.DB.prepare(
+    'SELECT book_id, rating, text, visibility, updated_at FROM reviews WHERE user_id = ? ORDER BY updated_at DESC'
+  ).bind(userId).all();
+  return json({ reviews: rows?.results || [] });
+}
+
+// Public stats for a book — anonymous, no auth required.
+async function handleBookStats(request, env, bookId) {
+  if (!bookId) return json({ error: 'Missing bookId' }, 400);
+  await ensureSchema(env);
+  const row = await env.DB.prepare(
+    `SELECT AVG(rating) AS avg_rating, COUNT(*) AS cnt
+     FROM reviews
+     WHERE book_id = ? AND visibility = 'public' AND rating IS NOT NULL`
+  ).bind(bookId).first();
+  return json({
+    bookId,
+    avgRating: row?.avg_rating != null ? Math.round(row.avg_rating * 10) / 10 : null,
+    count: row?.cnt || 0,
+  });
+}
+
+// Recent public reviews — anonymous, no auth required. Useful for a community feed later.
+async function handleReviewsPublic(request, env) {
+  const url = new URL(request.url);
+  const bookId = url.searchParams.get('bookId') || null;
+  const limit = Math.max(1, Math.min(50, parseInt(url.searchParams.get('limit'), 10) || 10));
+  await ensureSchema(env);
+  const query = bookId
+    ? `SELECT user_id, book_id, rating, text, updated_at FROM reviews
+       WHERE visibility = 'public' AND book_id = ?
+       ORDER BY updated_at DESC LIMIT ?`
+    : `SELECT user_id, book_id, rating, text, updated_at FROM reviews
+       WHERE visibility = 'public'
+       ORDER BY updated_at DESC LIMIT ?`;
+  const stmt = bookId
+    ? env.DB.prepare(query).bind(bookId, limit)
+    : env.DB.prepare(query).bind(limit);
+  const rows = await stmt.all();
+  return json({ reviews: rows?.results || [] });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
@@ -283,6 +388,15 @@ export default {
     if (path === '/me' && request.method === 'POST') return handleMe(request, env);
     if (path === '/load' && request.method === 'GET') return handleLoad(request, env);
     if (path === '/sync' && request.method === 'POST') return handleSync(request, env);
+
+    // Reviews (Phase 2A)
+    if (path === '/reviews' && request.method === 'POST') return handleReviewUpsert(request, env);
+    if (path === '/reviews' && request.method === 'DELETE') return handleReviewDelete(request, env);
+    if (path === '/reviews/mine' && request.method === 'GET') return handleReviewsMine(request, env);
+    if (path === '/reviews/public' && request.method === 'GET') return handleReviewsPublic(request, env);
+    // /books/<id>/stats
+    const bookStatsMatch = path.match(/^\/books\/([^/]+)\/stats$/);
+    if (bookStatsMatch && request.method === 'GET') return handleBookStats(request, env, decodeURIComponent(bookStatsMatch[1]));
 
     if (path === '/health') {
       return json({

@@ -948,13 +948,64 @@ function getReviews() { return Store.get(K.reviews, {}); }
 function getReview(bookId) { return getReviews()[bookId] || null; }
 function setReview(bookId, review) {
   const m = getReviews();
-  if (!review || (!review.rating && !review.text)) {
+  const isEmpty = !review || (!review.rating && !review.text);
+  if (isEmpty) {
     delete m[bookId];
   } else {
-    m[bookId] = { ...review, date: new Date().toISOString() };
+    // Preserve visibility if not specified (default: private)
+    const existing = m[bookId] || {};
+    m[bookId] = {
+      ...review,
+      visibility: review.visibility || existing.visibility || 'private',
+      date: new Date().toISOString(),
+    };
   }
   Store.set(K.reviews, m);
+  // Phase 2A: dual-write to the reviews table when signed in.
+  // Fire-and-forget; errors are non-fatal because localStorage is the canonical store.
+  try { ReviewsBackend.upsert(bookId, isEmpty ? null : m[bookId]); } catch {}
 }
+
+const ReviewsBackend = {
+  async upsert(bookId, review) {
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) return;
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return;
+    const url = Sync.workerUrl();
+    const headers = { 'Content-Type': 'application/json', ...(await Sync.authHeaders()) };
+    if (review === null) {
+      try {
+        await fetch(`${url}/reviews?bookId=${encodeURIComponent(bookId)}`, { method: 'DELETE', headers });
+      } catch {}
+      return;
+    }
+    try {
+      await fetch(`${url}/reviews`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          bookId,
+          rating: review.rating ?? null,
+          text: review.text ?? null,
+          visibility: review.visibility || 'private',
+        }),
+      });
+    } catch {}
+  },
+
+  // Public stats for a book — no auth needed. Returns { avgRating, count } or null.
+  _statsCache: {},
+  async stats(bookId) {
+    if (this._statsCache[bookId]) return this._statsCache[bookId];
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return null;
+    try {
+      const resp = await fetch(`${Sync.workerUrl()}/books/${encodeURIComponent(bookId)}/stats`);
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      this._statsCache[bookId] = data;
+      return data;
+    } catch { return null; }
+  },
+};
 
 // ---------- social: mock friends + activity feed ----------
 const FRIENDS = [
@@ -1348,7 +1399,7 @@ window.Chaptr = {
   addToCustomShelf, removeFromCustomShelf, customShelvesContaining,
   getCurrentBookId, setCurrentBookId,
   getBookProgress, setBookProgress,
-  getReviews, getReview, setReview,
+  getReviews, getReview, setReview, ReviewsBackend,
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
   attachSwipe, mountBottomNav, mountNowReadingPill,

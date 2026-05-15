@@ -68,6 +68,14 @@
   .empty-tag { padding: 14px; text-align: center; color: var(--ink-3); font-size: .9rem;
     border: 1px dashed var(--border); border-radius: var(--r-sm); }
 
+  /* shared compact toggle (used by the review-visibility picker) */
+  .yc-type-toggle { display: flex; gap: 6px; }
+  .yc-type-toggle button {
+    flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--r-pill);
+    background: var(--surface); color: var(--ink-2); font: inherit; font-size: .82rem; cursor: pointer;
+  }
+  .yc-type-toggle button.active { border-color: var(--primary); background: var(--primary-tint); color: var(--primary); }
+
   .shelf-section { margin-top: 28px; }
   .book-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px;
@@ -220,6 +228,15 @@
     </div>
     <div class="muted" id="ratingLabel" style="font-size:.82rem; margin-bottom:10px;">Tap a star to rate</div>
     <textarea class="review-text" id="reviewText" placeholder="A line or two — what hit, what didn't?"></textarea>
+    <div style="margin-top:12px;">
+      <label style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600;">Who can see this</label>
+      <div class="yc-type-toggle" id="reviewVisibility" style="margin-top:6px;">
+        <button data-vis="private">🔒 Private</button>
+        <button data-vis="friends">👥 Friends</button>
+        <button data-vis="public">🌍 Public</button>
+      </div>
+      <div class="muted" style="font-size:.78rem; margin-top:6px;" id="reviewVisHint">Only you. Default.</div>
+    </div>
     <div class="dlg-actions">
       <button class="btn btn-ghost btn-sm" id="reviewDelete" style="visibility:hidden;">Delete</button>
       <div class="right">
@@ -237,7 +254,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
@@ -423,6 +440,20 @@
   const reviewDlg = document.getElementById('reviewDlg');
   let reviewBookId = null;
   let reviewRating = 0;
+  let reviewVisibility = 'private';
+  const VIS_HINTS = {
+    private: 'Only you. Default.',
+    friends: 'You and your friends. (Friends graph arrives in Phase 2B.)',
+    public:  'Everyone. Counts toward the book\'s community rating.',
+  };
+  function paintVisibility() {
+    document.querySelectorAll('#reviewVisibility button').forEach(b =>
+      b.classList.toggle('active', b.dataset.vis === reviewVisibility));
+    document.getElementById('reviewVisHint').textContent = VIS_HINTS[reviewVisibility];
+  }
+  document.querySelectorAll('#reviewVisibility button').forEach(btn => {
+    btn.addEventListener('click', () => { reviewVisibility = btn.dataset.vis; paintVisibility(); });
+  });
   const ratingLabels = ['', 'Hated it', 'Meh', 'It was OK', 'Really liked it', 'Loved it'];
 
   function paintStars() {
@@ -438,11 +469,13 @@
     const b = findBook(bookId);
     const existing = getReview(bookId);
     reviewRating = existing?.rating || 0;
+    reviewVisibility = existing?.visibility || 'private';
     document.getElementById('reviewBookTitle').textContent = b.title;
     document.getElementById('reviewBookAuthor').textContent = b.author;
     document.getElementById('reviewText').value = existing?.text || '';
     document.getElementById('reviewDelete').style.visibility = existing ? 'visible' : 'hidden';
     paintStars();
+    paintVisibility();
     reviewDlg.classList.add('open');
     setTimeout(() => document.getElementById('reviewText').focus(), 50);
   }
@@ -460,7 +493,11 @@
   document.getElementById('reviewSave').addEventListener('click', () => {
     if (!reviewBookId) return;
     const text = document.getElementById('reviewText').value.trim();
-    setReview(reviewBookId, { rating: reviewRating || null, text: text || null });
+    setReview(reviewBookId, {
+      rating: reviewRating || null,
+      text: text || null,
+      visibility: reviewVisibility,
+    });
     closeReviewDlg();
     renderShelf();
   });
