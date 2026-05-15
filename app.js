@@ -116,6 +116,8 @@ const Auth = {
         // Try to pull existing Clerk-user data first; if none, push our local state.
         const res = await Sync.pull();
         if (res?.ok && !res.hydrated) await Sync.pushNow();
+        // Phase 3A — make sure community timing has our existing reads too.
+        try { await Stats.backfillFinishes(); } catch {}
       }
     } catch (e) { console.warn('[Chaptr] post-sign-in sync failed:', e); }
   },
@@ -939,6 +941,8 @@ function moveToShelf(bookId, shelf) {
     if (!dates[bookId]) dates[bookId] = {};
     dates[bookId].read = new Date().toISOString().slice(0, 10);
     Store.set(K.shelfDates, dates);
+    // Phase 3A — push finish data so the community sees how long you took.
+    try { Stats.pushFinish(bookId); } catch {}
   }
 }
 function getShelfDates() { return Store.get(K.shelfDates, {}); }
@@ -965,6 +969,61 @@ function setReview(bookId, review) {
   // Fire-and-forget; errors are non-fatal because localStorage is the canonical store.
   try { ReviewsBackend.upsert(bookId, isEmpty ? null : m[bookId]); } catch {}
 }
+
+// ---------- Stats: finish tracking + trending (Phase 3A + 3D) ----------
+const Stats = {
+  // Total minutes the user has spent on a book according to their session history.
+  totalMinutesForBook(bookId) {
+    const hist = Store.get('chaptr.history', []);
+    return hist
+      .filter(e => e.bookId === bookId)
+      .reduce((a, e) => a + (e.minutes || 0), 0);
+  },
+
+  // Push a finish record for the book — call when a book lands on the Read shelf.
+  // Silently no-ops when not signed in or no history exists for the book.
+  async pushFinish(bookId) {
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) return;
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return;
+    const minutes = this.totalMinutesForBook(bookId);
+    if (minutes < 1) return; // don't pollute aggregates with zero-minute finishes
+    try {
+      await fetch(`${Sync.workerUrl()}/book-finishes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await Sync.authHeaders()) },
+        body: JSON.stringify({ bookId, totalMinutes: minutes }),
+      });
+    } catch {}
+  },
+
+  // Backfill: walk the user's Read shelf once and push timing for any book that
+  // has logged session minutes. Idempotent thanks to upsert. Run on first
+  // sign-in after Phase 3A ships.
+  async backfillFinishes() {
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) return;
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return;
+    const shelves = Store.get('chaptr.shelves', null);
+    if (!shelves?.read) return;
+    for (const bookId of shelves.read) {
+      await this.pushFinish(bookId);
+    }
+  },
+
+  // Trending books across all readers (last 30d, public reviews only). Returns
+  // an array of { bookId, activity, avgRating } sorted by activity desc.
+  _trendingCache: null,
+  async trending(limit = 8) {
+    if (this._trendingCache) return this._trendingCache;
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return [];
+    try {
+      const resp = await fetch(`${Sync.workerUrl()}/trending?limit=${limit}`);
+      if (!resp.ok) return [];
+      const data = await resp.json();
+      this._trendingCache = data.books || [];
+      return this._trendingCache;
+    } catch { return []; }
+  },
+};
 
 // ---------- spoiler renderer (Phase 2B bonus) ----------
 // Turns "before ||hidden|| after" into safe HTML with click-to-reveal blurred spans.
@@ -1077,6 +1136,20 @@ const ReviewsBackend = {
       if (!resp.ok) return null;
       const data = await resp.json();
       this._statsCache[bookId] = data;
+      return data;
+    } catch { return null; }
+  },
+
+  // Per-book timing across all users — anonymous.
+  _timingCache: {},
+  async timing(bookId) {
+    if (this._timingCache[bookId]) return this._timingCache[bookId];
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return null;
+    try {
+      const resp = await fetch(`${Sync.workerUrl()}/books/${encodeURIComponent(bookId)}/timing`);
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      this._timingCache[bookId] = data;
       return data;
     } catch { return null; }
   },
@@ -1489,7 +1562,7 @@ window.Chaptr = {
   addToCustomShelf, removeFromCustomShelf, customShelvesContaining,
   getCurrentBookId, setCurrentBookId,
   getBookProgress, setBookProgress,
-  getReviews, getReview, setReview, ReviewsBackend, Social, renderSpoilers,
+  getReviews, getReview, setReview, ReviewsBackend, Social, Stats, renderSpoilers,
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
   attachSwipe, mountBottomNav, mountNowReadingPill,

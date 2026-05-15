@@ -47,3 +47,16 @@ CREATE TABLE IF NOT EXISTS reviews (
 );
 CREATE INDEX IF NOT EXISTS idx_reviews_book_public ON reviews(book_id, visibility);
 CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id, updated_at DESC);
+
+-- Phase 3A — "time-honest ratings". One row per (user, book) recording how
+-- many minutes a user spent on a book before marking it Read. Aggregated
+-- anonymously to surface "Avg reader finished in 6.2 hrs".
+CREATE TABLE IF NOT EXISTS book_finishes (
+  user_id TEXT NOT NULL,
+  book_id TEXT NOT NULL,
+  total_minutes INTEGER NOT NULL,
+  finished_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, book_id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_finishes_book ON book_finishes(book_id);

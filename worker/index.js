@@ -239,6 +239,16 @@ async function ensureSchema(env) {
   `).run();
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_reviews_book_public ON reviews(book_id, visibility)`).run();
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id, updated_at DESC)`).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS book_finishes (
+      user_id TEXT NOT NULL,
+      book_id TEXT NOT NULL,
+      total_minutes INTEGER NOT NULL,
+      finished_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, book_id)
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_finishes_book ON book_finishes(book_id)`).run();
 }
 
 async function handleMe(request, env) {
@@ -563,6 +573,73 @@ async function handleFeed(request, env) {
   });
 }
 
+// ---------- book finishes + timing (Phase 3A) ----------
+async function handleFinishUpsert(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { bookId, totalMinutes } = body || {};
+  if (!bookId || typeof bookId !== 'string' || bookId.length > 128) return json({ error: 'Missing bookId' }, 400);
+  const minutes = parseInt(totalMinutes, 10);
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1000000) return json({ error: 'Bad totalMinutes' }, 400);
+  await ensureSchema(env);
+  const now = new Date().toISOString();
+  await env.DB.prepare(`
+    INSERT INTO book_finishes (user_id, book_id, total_minutes, finished_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id, book_id) DO UPDATE SET
+      total_minutes = excluded.total_minutes,
+      finished_at = excluded.finished_at
+  `).bind(userId, bookId, minutes, now).run();
+  return json({ ok: true, totalMinutes: minutes });
+}
+
+async function handleBookTiming(request, env, bookId) {
+  if (!bookId) return json({ error: 'Missing bookId' }, 400);
+  await ensureSchema(env);
+  const row = await env.DB.prepare(
+    `SELECT AVG(total_minutes) AS avg_min, COUNT(*) AS cnt
+     FROM book_finishes WHERE book_id = ?`
+  ).bind(bookId).first();
+  const cnt = row?.cnt || 0;
+  return json({
+    bookId,
+    avgMinutes: cnt > 0 ? Math.round(row.avg_min) : null,
+    avgHours: cnt > 0 ? Math.round((row.avg_min / 60) * 10) / 10 : null,
+    count: cnt,
+  });
+}
+
+// ---------- Trending (Phase 3D) ----------
+async function handleTrending(request, env) {
+  const url = new URL(request.url);
+  const limit = Math.max(1, Math.min(20, parseInt(url.searchParams.get('limit'), 10) || 8));
+  await ensureSchema(env);
+  // Past 30 days of public reviews, ranked by review count then recency.
+  const rows = await env.DB.prepare(`
+    SELECT book_id,
+           COUNT(*) AS activity,
+           AVG(rating) AS avg_rating,
+           MAX(updated_at) AS most_recent
+    FROM reviews
+    WHERE visibility = 'public'
+      AND updated_at > datetime('now', '-30 days')
+      AND rating IS NOT NULL
+    GROUP BY book_id
+    ORDER BY activity DESC, most_recent DESC
+    LIMIT ?
+  `).bind(limit).all();
+  return json({
+    books: (rows?.results || []).map(r => ({
+      bookId: r.book_id,
+      activity: r.activity,
+      avgRating: r.avg_rating != null ? Math.round(r.avg_rating * 10) / 10 : null,
+      mostRecent: r.most_recent,
+    })),
+  });
+}
+
 // Recent public reviews — anonymous, no auth required. Useful for a community feed later.
 async function handleReviewsPublic(request, env) {
   const url = new URL(request.url);
@@ -603,9 +680,13 @@ export default {
     if (path === '/reviews' && request.method === 'DELETE') return handleReviewDelete(request, env);
     if (path === '/reviews/mine' && request.method === 'GET') return handleReviewsMine(request, env);
     if (path === '/reviews/public' && request.method === 'GET') return handleReviewsPublic(request, env);
-    // /books/<id>/stats
+    // /books/<id>/stats and /books/<id>/timing
     const bookStatsMatch = path.match(/^\/books\/([^/]+)\/stats$/);
     if (bookStatsMatch && request.method === 'GET') return handleBookStats(request, env, decodeURIComponent(bookStatsMatch[1]));
+    const bookTimingMatch = path.match(/^\/books\/([^/]+)\/timing$/);
+    if (bookTimingMatch && request.method === 'GET') return handleBookTiming(request, env, decodeURIComponent(bookTimingMatch[1]));
+    if (path === '/book-finishes' && request.method === 'POST') return handleFinishUpsert(request, env);
+    if (path === '/trending' && request.method === 'GET') return handleTrending(request, env);
 
     // Profiles + follow graph (Phase 2B)
     if (path === '/me/profile' && request.method === 'GET') return handleMyProfileGet(request, env);
