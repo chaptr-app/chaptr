@@ -973,20 +973,24 @@ function setReview(bookId, review) {
 // ---------- Stats: finish tracking + trending (Phase 3A + 3D) ----------
 const Stats = {
   // Total minutes the user has spent on a book according to their session history.
+  // Uses ms for accuracy (so sub-minute test sessions still count) and rounds up
+  // to at least 1 minute when there's any session time at all.
   totalMinutesForBook(bookId) {
     const hist = Store.get('chaptr.history', []);
-    return hist
+    const totalMs = hist
       .filter(e => e.bookId === bookId)
-      .reduce((a, e) => a + (e.minutes || 0), 0);
+      .reduce((a, e) => a + (e.ms || (e.minutes || 0) * 60000), 0);
+    if (totalMs <= 0) return 0;
+    return Math.max(1, Math.round(totalMs / 60000));
   },
 
   // Push a finish record for the book — call when a book lands on the Read shelf.
-  // Silently no-ops when not signed in or no history exists for the book.
+  // Silently no-ops when not signed in or zero session time exists for the book.
   async pushFinish(bookId) {
     if (typeof Auth === 'undefined' || !Auth.signedIn()) return;
     if (typeof Sync === 'undefined' || !Sync.enabled()) return;
     const minutes = this.totalMinutesForBook(bookId);
-    if (minutes < 1) return; // don't pollute aggregates with zero-minute finishes
+    if (minutes < 1) return;
     try {
       await fetch(`${Sync.workerUrl()}/book-finishes`, {
         method: 'POST',
