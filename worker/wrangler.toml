@@ -20,6 +20,14 @@ compatibility_date = "2024-09-23"
 # publishable key. Safe to commit — it's already public via the publishable key.
 CLERK_FRONTEND_API = "oriented-slug-17.clerk.accounts.dev"
 
+# Polish — Claude rate limits.
+# Per-IP cap: max number of Claude-powered requests one IP can make in a UTC day.
+# Catches both anonymous and signed-in abuse.
+USER_DAILY_CAP = "50"
+# Global cap: hard ceiling across ALL traffic per UTC day. At ~$0.003/call this
+# bounds your worst-case Anthropic spend to ~$3/day. Bump up as you scale.
+GLOBAL_DAILY_CAP = "1000"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "chaptr-db"

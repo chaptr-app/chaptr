@@ -86,6 +86,15 @@ CREATE TABLE IF NOT EXISTS shelf_members (
 );
 CREATE INDEX IF NOT EXISTS idx_sm_user ON shelf_members(user_id);
 
+-- Polish: per-IP + global daily Claude usage caps. Scope is 'global' or
+-- 'ip_<addr>'. One row per scope per day, monotonically incremented.
+CREATE TABLE IF NOT EXISTS coach_usage (
+  scope TEXT NOT NULL,
+  day TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (scope, day)
+);
+
 -- Phase 4 — reading buddies. Two-person pair reads with a shared message thread.
 CREATE TABLE IF NOT EXISTS pair_reads (
   id TEXT PRIMARY KEY,

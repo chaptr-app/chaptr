@@ -316,6 +316,88 @@ async function ensureSchema(env) {
     )
   `).run();
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_fcm_user ON friend_challenge_members(user_id, status)`).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS coach_usage (
+      scope TEXT NOT NULL,
+      day TEXT NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (scope, day)
+    )
+  `).run();
+}
+
+// ---------- Claude rate limits (V4 polish) ----------
+// Per-IP cap (default 50/day) catches both anon and signed-in abuse.
+// Global cap (default 1000/day, ~$3/day at Haiku pricing) bounds worst-case spend.
+function rateLimitScope(request) {
+  const ip = request.headers.get('CF-Connecting-IP')
+          || request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
+          || request.headers.get('X-Real-IP')
+          || 'unknown';
+  return 'ip_' + ip;
+}
+
+async function enforceClaudeLimits(request, env) {
+  await ensureSchema(env);
+  const day = new Date().toISOString().slice(0, 10);
+  const perIp = parseInt(env.USER_DAILY_CAP, 10) || 50;
+  const globalCap = parseInt(env.GLOBAL_DAILY_CAP, 10) || 1000;
+  const scope = rateLimitScope(request);
+
+  // Global check first — if the whole app is over budget, no one calls Claude.
+  const g = await env.DB.prepare('SELECT count FROM coach_usage WHERE scope = ? AND day = ?').bind('global', day).first();
+  if (g && g.count >= globalCap) {
+    return {
+      ok: false, status: 503,
+      headers: { 'X-RateLimit-Scope': 'global', 'X-RateLimit-Remaining': '0' },
+      error: 'Claude is napping for the day — global usage cap reached. Try again tomorrow.',
+    };
+  }
+  // Per-IP check.
+  const u = await env.DB.prepare('SELECT count FROM coach_usage WHERE scope = ? AND day = ?').bind(scope, day).first();
+  const used = u?.count || 0;
+  if (used >= perIp) {
+    return {
+      ok: false, status: 429,
+      headers: { 'X-RateLimit-Scope': 'ip', 'X-RateLimit-Limit': String(perIp), 'X-RateLimit-Remaining': '0' },
+      error: `You've used ${perIp} Claude requests today. The limit resets at midnight UTC.`,
+    };
+  }
+  // Increment both counters.
+  await env.DB.prepare(`
+    INSERT INTO coach_usage (scope, day, count) VALUES (?, ?, 1)
+    ON CONFLICT(scope, day) DO UPDATE SET count = count + 1
+  `).bind('global', day).run();
+  await env.DB.prepare(`
+    INSERT INTO coach_usage (scope, day, count) VALUES (?, ?, 1)
+    ON CONFLICT(scope, day) DO UPDATE SET count = count + 1
+  `).bind(scope, day).run();
+
+  return {
+    ok: true,
+    headers: {
+      'X-RateLimit-Scope': 'ip',
+      'X-RateLimit-Limit': String(perIp),
+      'X-RateLimit-Remaining': String(Math.max(0, perIp - used - 1)),
+    },
+  };
+}
+
+// Wrap an existing Claude handler so it short-circuits on cap and adds rate-limit headers on success.
+function withClaudeLimits(handler) {
+  return async (request, env) => {
+    const gate = await enforceClaudeLimits(request, env);
+    if (!gate.ok) {
+      return new Response(JSON.stringify({ error: gate.error }), {
+        status: gate.status,
+        headers: { ...CORS, 'Content-Type': 'application/json', ...gate.headers },
+      });
+    }
+    const resp = await handler(request, env);
+    const out = new Response(resp.body, resp);
+    for (const [k, v] of Object.entries(gate.headers || {})) out.headers.set(k, v);
+    return out;
+  };
 }
 
 // Helper: is requester (or anonymous) allowed to view a row with this visibility owned by ownerId?
@@ -1456,9 +1538,9 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, ''); // strip trailing slash
 
-    // Backward-compatible recommend endpoint at root.
+    // Backward-compatible recommend endpoint at root (rate-limited).
     if ((path === '' || path === '/') && request.method === 'POST') {
-      return handleRecommend(request, env);
+      return withClaudeLimits(handleRecommend)(request, env);
     }
     if (path === '/me' && request.method === 'POST') return handleMe(request, env);
     if (path === '/load' && request.method === 'GET') return handleLoad(request, env);
@@ -1504,11 +1586,11 @@ export default {
     const sMemberDel = path.match(/^\/shelves\/([^/]+)\/members$/);
     if (sMemberDel && request.method === 'DELETE') return handleShelfMemberRemove(request, env, sMemberDel[1]);
 
-    // Coach (Phase V3)
-    if (path === '/coach/persona' && request.method === 'POST') return handleCoachPersona(request, env);
-    if (path === '/coach/stall-recovery' && request.method === 'POST') return handleCoachStallRecovery(request, env);
-    if (path === '/coach/book-fit' && request.method === 'POST') return handleCoachBookFit(request, env);
-    if (path === '/coach/chapter-recap' && request.method === 'POST') return handleCoachChapterRecap(request, env);
+    // Coach (Phase V3 + V4) — all rate-limited so a hot loop can't drain your wallet.
+    if (path === '/coach/persona' && request.method === 'POST') return withClaudeLimits(handleCoachPersona)(request, env);
+    if (path === '/coach/stall-recovery' && request.method === 'POST') return withClaudeLimits(handleCoachStallRecovery)(request, env);
+    if (path === '/coach/book-fit' && request.method === 'POST') return withClaudeLimits(handleCoachBookFit)(request, env);
+    if (path === '/coach/chapter-recap' && request.method === 'POST') return withClaudeLimits(handleCoachChapterRecap)(request, env);
 
     // Friend challenges (Phase V3)
     if (path === '/friend-challenges' && request.method === 'POST') return handleFriendChallengeCreate(request, env);
@@ -1542,6 +1624,20 @@ export default {
         hasDb: !!env.DB,
         hasClerk: !!env.CLERK_FRONTEND_API,
         clerkInstance: env.CLERK_FRONTEND_API || null,
+      });
+    }
+
+    // Today's Claude usage (your IP + global). Useful for spot-checking from the browser.
+    if (path === '/coach/usage' && request.method === 'GET') {
+      await ensureSchema(env);
+      const day = new Date().toISOString().slice(0, 10);
+      const g = await env.DB.prepare('SELECT count FROM coach_usage WHERE scope = ? AND day = ?').bind('global', day).first();
+      const scope = rateLimitScope(request);
+      const u = await env.DB.prepare('SELECT count FROM coach_usage WHERE scope = ? AND day = ?').bind(scope, day).first();
+      return json({
+        day,
+        global: { used: g?.count || 0, cap: parseInt(env.GLOBAL_DAILY_CAP, 10) || 1000 },
+        yours:  { used: u?.count || 0, cap: parseInt(env.USER_DAILY_CAP, 10) || 50, scope },
       });
     }
 
