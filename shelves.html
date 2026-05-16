@@ -425,7 +425,7 @@
       const tagBtn = `<button class="tag-btn ${tagged.length ? 'has-tags' : ''}" data-tag="${id}">${tagged.length ? `Tags · ${tagged.length}` : '+ Tag'}</button>`;
       const reviewBtn = `<button class="review-btn" data-review="${id}">${getReview(id) ? 'Edit review' : '+ Review'}</button>`;
       // Phase V3 — Stall recovery: only on the Stalled smart shelf
-      const stallBtn = (meta.smart && activeShelf === 'smart_stalled')
+      const stallBtn = (meta.smart && activeShelf === '__smart_stalled')
         ? `<button class="review-btn" data-stall="${id}" style="border-color:var(--accent); color:var(--accent);">✨ Get re-entry tips</button>`
         : '';
 
