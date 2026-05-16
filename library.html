@@ -262,13 +262,13 @@
   </div>
 </footer>
 
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
           getReviews, FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
           listCustomShelves, getAISettings, ReviewsBackend,
-          Social, Auth, Stats, Coach, renderSpoilers,
+          Social, Auth, Stats, Coach, Affiliate, renderSpoilers,
           Store, K, OL } = window.Chaptr;
 
   // Personal WPM with a fallback. Used for "length in hours for you" math.
@@ -347,11 +347,13 @@
     el.innerHTML = recs.map((rec, i) => {
       const b = findBook(rec.bookId);
       const href = 'book.html?id=' + encodeURIComponent(b.id);
+      const buyUrls = Affiliate.urls(b);
+      const buyLink = buyUrls.length ? `<a href="${buyUrls[0].href}" target="_blank" rel="noopener noreferrer" style="color:var(--accent); font-size:.78rem; text-decoration:none; margin-left:6px;">🛒 Buy</a>` : '';
       return `<div class="rec-card">
         <a href="${href}" style="line-height:0; text-decoration:none;"><div class="cover-lg" data-cover-idx="${i}"></div></a>
         <div>
           <div class="title"><a href="${href}" style="color:inherit; text-decoration:none;">${b.title}</a></div>
-          <div class="author">${b.author} · ${b.genre} · ${b.pages}p</div>
+          <div class="author">${b.author} · ${b.genre} · ${b.pages}p ${buyLink}</div>
           <div class="community" data-com-idx="${i}" style="font-size:.78rem; color:var(--ink-3); margin-top:4px; min-height:1.1em;"></div>
           <div class="public-snippet" data-snippet-idx="${i}" style="display:none; font-size:.8rem; color:var(--ink-2); font-style:italic; margin-top:6px; padding-top:6px; border-top:1px dashed var(--border);"></div>
         </div>

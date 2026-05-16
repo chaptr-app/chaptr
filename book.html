@@ -107,6 +107,12 @@
       <div class="recap-out" id="bRecapOut" style="display:none;"></div>
     </section>
 
+    <section class="b-section" id="bBuySection" style="display:none;">
+      <h2>Buy this book</h2>
+      <p class="muted" style="margin-top:-4px;">External links. Searches the vendor for the closest edition.</p>
+      <div id="bBuyButtons" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"></div>
+    </section>
+
     <section class="b-section">
       <h2>Reviews</h2>
       <div id="bReviews"></div>
@@ -123,10 +129,10 @@
   </div>
 </footer>
 
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 <script>
   const { findBook, OL, Auth, Sync, Coach, ReviewsBackend, hashHue,
-          getShelves, moveToShelf, getBookProgress } = window.Chaptr;
+          getShelves, moveToShelf, getBookProgress, Affiliate } = window.Chaptr;
 
   const params = new URLSearchParams(location.search);
   // Accept ?id=b1, or ?title=...&author=... for ad-hoc books from search results
@@ -206,6 +212,18 @@
     loadFit(book);
     loadReviews(book);
     setupRecap(book);
+    renderBuy(book);
+  }
+
+  function renderBuy(book) {
+    const urls = Affiliate.urls(book);
+    if (!urls.length) return; // section stays hidden when no vendors configured
+    document.getElementById('bBuySection').style.display = '';
+    document.getElementById('bBuyButtons').innerHTML = urls.map(u =>
+      `<a href="${u.href}" target="_blank" rel="noopener noreferrer" class="btn btn-outline">
+         ${u.emoji} ${u.label}
+       </a>`
+    ).join('');
   }
 
   async function loadStats(book) {

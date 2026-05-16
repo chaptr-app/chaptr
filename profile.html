@@ -378,6 +378,13 @@
   </section>
 
   <section class="section">
+    <div class="eyebrow">Commerce · affiliate links</div>
+    <h2>Earn on book sales.</h2>
+    <p class="muted" style="margin-top:4px;">Paste your affiliate IDs and "Buy" buttons appear across the app. Sign-ups are free; commissions vary by vendor.</p>
+    <div class="card" id="affCard" style="margin-top:14px;"></div>
+  </section>
+
+  <section class="section">
     <div class="eyebrow">Cloud sync · V2 preview</div>
     <h2>Your data, across devices.</h2>
     <p class="muted" style="margin-top:4px;">Snapshot sync via your Cloudflare Worker. Anonymous device ID for now — real accounts arrive in Phase 1B.</p>
@@ -559,14 +566,14 @@
   </div>
 </footer>
 
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
           getYearChallenge, setYearChallenge, getYearChallengeProgress,
           getAISettings, setAISetting, exportReaderProfile, wipeReaderProfile,
           getGoalType, setGoalType, getDailyGoalPages, setDailyGoalPages,
-          Sync, Auth, Social, Coach, FriendChallenges, getDeviceId,
+          Sync, Auth, Social, Coach, FriendChallenges, Affiliate, getDeviceId,
           getCustomChallenges, createCustomChallenge, deleteCustomChallenge, computeChallengeProgress,
           Store, K } = window.Chaptr;
 
@@ -720,6 +727,33 @@
       else run = 0;
     }
     document.getElementById('calLongestRun').textContent = longest;
+  }
+
+  // --- affiliate links (V4 monetization) ---
+  function renderAffiliate() {
+    const ids = Affiliate.ids();
+    const wrap = document.getElementById('affCard');
+    wrap.innerHTML = Affiliate.VENDORS.map(v => `
+      <div class="settings-row">
+        <div style="flex:1; margin-right:14px;">
+          <div class="label">${v.emoji} ${v.name} <span class="muted" style="font-weight:400; font-size:.78rem;">· ${v.cut}</span></div>
+          <div class="desc">${v.desc}</div>
+          <input type="text" data-aff-input="${v.id}" placeholder="affiliate id/tag"
+            value="${(ids[v.id] || '').replace(/"/g, '&quot;')}"
+            style="margin-top:8px; width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; font-family:monospace; background:var(--bg); color:var(--ink); font-size:.85rem;">
+        </div>
+        <button class="btn btn-outline btn-sm" data-aff-save="${v.id}">Save</button>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('[data-aff-save]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const vendor = btn.dataset.affSave;
+        const input = wrap.querySelector(`[data-aff-input="${vendor}"]`);
+        Affiliate.setId(vendor, input.value);
+        btn.textContent = '✓ Saved';
+        setTimeout(() => { btn.textContent = 'Save'; }, 1500);
+      });
+    });
   }
 
   // --- account (V2 Phase 1B — Clerk) ---
@@ -1328,6 +1362,7 @@
   }
 
   renderStats();
+  renderAffiliate();
   renderAuth();
   wireAuth();
   renderSyncStatus();

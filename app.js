@@ -1261,6 +1261,49 @@ const Stats = {
   },
 };
 
+// ---------- Affiliate links (V4 monetization polish) ----------
+// Stores per-vendor affiliate IDs in localStorage; produces clickable URLs for
+// any book. Search-based URLs work without ISBNs (we don't have ISBN metadata
+// from OpenLibrary's search endpoint). Vendor lands on a result page; user
+// picks the right edition.
+const Affiliate = {
+  VENDORS: [
+    { id: 'bookshop', name: 'Bookshop.org', emoji: '📚', cut: '10%', desc: 'Supports indie bookstores. Sign up at bookshop.org/info/affiliates' },
+    { id: 'amazon',   name: 'Amazon',       emoji: '📦', cut: '~4.5%', desc: 'Largest book selection. Sign up at affiliate-program.amazon.com' },
+    { id: 'librofm',  name: 'Libro.fm',     emoji: '🎧', cut: '~8%', desc: 'Indie audiobooks. Sign up at libro.fm/affiliate' },
+  ],
+  ids() {
+    return {
+      bookshop: (localStorage.getItem('chaptr.aff.bookshop') || '').trim(),
+      amazon:   (localStorage.getItem('chaptr.aff.amazon')   || '').trim(),
+      librofm:  (localStorage.getItem('chaptr.aff.librofm')  || '').trim(),
+    };
+  },
+  setId(vendor, id) {
+    localStorage.setItem('chaptr.aff.' + vendor, (id || '').trim());
+  },
+  configured() { return Object.values(this.ids()).some(Boolean); },
+  urls(book) {
+    if (!book?.title || !book?.author) return [];
+    const ids = this.ids();
+    const q = encodeURIComponent(book.title + ' ' + book.author);
+    const out = [];
+    if (ids.bookshop) out.push({
+      vendor: 'bookshop', emoji: '📚', label: 'Bookshop.org',
+      href: `https://bookshop.org/search?keywords=${q}&affiliate=${encodeURIComponent(ids.bookshop)}`,
+    });
+    if (ids.amazon) out.push({
+      vendor: 'amazon', emoji: '📦', label: 'Amazon',
+      href: `https://www.amazon.com/s?k=${q}&i=stripbooks&tag=${encodeURIComponent(ids.amazon)}`,
+    });
+    if (ids.librofm) out.push({
+      vendor: 'librofm', emoji: '🎧', label: 'Libro.fm',
+      href: `https://libro.fm/audiobooks?q=${q}&affiliate_code=${encodeURIComponent(ids.librofm)}`,
+    });
+    return out;
+  },
+};
+
 // ---------- spoiler renderer (Phase 2B bonus) ----------
 // Turns "before ||hidden|| after" into safe HTML with click-to-reveal blurred spans.
 function renderSpoilers(text) {
@@ -1946,7 +1989,7 @@ window.Chaptr = {
   getReviews, getReview, setReview, ReviewsBackend, Social, Stats, PairReads, Coach,
   FriendChallenges,
   getCustomChallenges, createCustomChallenge, deleteCustomChallenge, computeChallengeProgress,
-  renderSpoilers,
+  Affiliate, renderSpoilers,
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
   attachSwipe, mountBottomNav, mountNowReadingPill,
