@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF7F2">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Chaptr">
+<title>Privacy · Chaptr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=5">
+<style>
+  .doc { max-width: 720px; margin: 32px 0 80px; }
+  .doc h1 { margin: 0 0 8px; }
+  .doc .lead { color: var(--ink-3); margin-bottom: 24px; }
+  .doc h2 { margin: 28px 0 8px; }
+  .doc p { line-height: 1.6; }
+  .doc ul { line-height: 1.6; padding-left: 22px; }
+  .doc .effective { color: var(--ink-3); font-size: .85rem; margin-bottom: 18px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="index.html"><span class="brand-mark">C</span> Chaptr</a>
+    <div class="nav-links">
+      <a href="today.html">Today</a>
+      <a href="library.html">Library</a>
+      <a href="shelves.html">Shelves</a>
+      <a href="profile.html">Profile</a>
+    </div>
+    <div class="nav-cta"><a href="today.html" class="btn btn-ghost btn-sm hide-sm">← Back</a></div>
+  </div>
+</nav>
+
+<main class="container">
+  <section class="doc">
+    <div class="eyebrow">Privacy</div>
+    <h1>Privacy policy.</h1>
+    <p class="effective">Effective: 2026-05-15</p>
+    <p class="lead">Plain-English version: we store the minimum needed to run the app, you can export or wipe your data anytime, and Claude never sees content from your private shelves or reviews.</p>
+
+    <h2>What we store</h2>
+    <ul>
+      <li><strong>Locally on your device:</strong> reading sessions, shelves, reviews, custom challenges, AI settings, your theme. This stays in your browser even if you never sign in.</li>
+      <li><strong>On our backend (only if you enable cloud sync):</strong> a copy of the above keyed under a per-device anonymous ID, and—if you sign in—your Clerk user ID, username, and display name.</li>
+      <li><strong>Public data you opt into:</strong> reviews you mark as "Public", shelves you mark as "Public" or "Friends", and follow relationships.</li>
+    </ul>
+
+    <h2>What we never store</h2>
+    <ul>
+      <li>Email or password — Clerk handles auth and we never see your credentials.</li>
+      <li>Payment info — there's no payment.</li>
+      <li>Reading content from books — we store page numbers and minutes, not text.</li>
+      <li>Location data.</li>
+      <li>Device identifiers beyond a localStorage random ID.</li>
+    </ul>
+
+    <h2>What Claude (Anthropic) sees</h2>
+    <ul>
+      <li>Your aggregated reading-DNA stats (WPM, top genre, session length, mood pattern) when generating Reader Persona, "How this fits you" blurbs, stall-recovery tips, or chapter recaps.</li>
+      <li>Your search query when you use Ask Claude.</li>
+      <li>Book titles and authors for context.</li>
+    </ul>
+    <p>Claude never receives content from your private shelves, your private reviews, or your friends' data. Every AI surface is opt-out in <a href="profile.html">Profile → Claude · trust & control</a>.</p>
+
+    <h2>Third parties</h2>
+    <ul>
+      <li><strong>Cloudflare</strong> — hosts our backend (Worker + D1 database).</li>
+      <li><strong>Clerk</strong> — handles authentication if you sign in.</li>
+      <li><strong>Anthropic</strong> — processes your AI requests (Claude API).</li>
+      <li><strong>OpenLibrary</strong> — used for book metadata and covers.</li>
+      <li><strong>Google Fonts</strong> — serves the Inter and Fraunces typefaces.</li>
+    </ul>
+
+    <h2>Your controls</h2>
+    <ul>
+      <li><strong>Export Reader Profile</strong> downloads a JSON of all your data (Profile page).</li>
+      <li><strong>Wipe Reader Profile</strong> clears history, WPM, sessions, and streak data while keeping shelves and reviews.</li>
+      <li><strong>Wipe local data</strong> in Settings clears everything on this device.</li>
+      <li><strong>Sign out</strong> stops cloud sync going forward.</li>
+      <li>To delete cloud-stored data, sign in and contact us via the GitHub issue tracker; we'll remove your row from D1.</li>
+    </ul>
+
+    <h2>Children</h2>
+    <p>Chaptr is not directed at children under 13. If we learn we've collected data from a child under 13, we'll delete it.</p>
+
+    <h2>Changes</h2>
+    <p>We'll update the "Effective" date above when this policy changes. Material changes will get an in-app notice.</p>
+
+    <p class="muted" style="margin-top:32px; font-size:.85rem;">
+      <a href="about.html">About</a> · <a href="terms.html">Terms</a>
+    </p>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container row">
+    <span>© Chaptr — a prototype.</span>
+    <span class="muted">Time is the new star rating.</span>
+  </div>
+</footer>
+
+<script src="app.js?v=31"></script>
+</body>
+</html>

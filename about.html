@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF7F2">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Chaptr">
+<title>About · Chaptr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=5">
+<style>
+  .doc { max-width: 720px; margin: 32px 0 80px; }
+  .doc h1 { margin: 0 0 8px; }
+  .doc .lead { color: var(--ink-3); margin-bottom: 24px; }
+  .doc h2 { margin: 28px 0 8px; }
+  .doc p { line-height: 1.6; }
+  .doc ul { line-height: 1.6; padding-left: 22px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="index.html"><span class="brand-mark">C</span> Chaptr</a>
+    <div class="nav-links">
+      <a href="today.html">Today</a>
+      <a href="library.html">Library</a>
+      <a href="shelves.html">Shelves</a>
+      <a href="profile.html">Profile</a>
+    </div>
+    <div class="nav-cta"><a href="today.html" class="btn btn-ghost btn-sm hide-sm">← Back</a></div>
+  </div>
+</nav>
+
+<main class="container">
+  <section class="doc">
+    <div class="eyebrow">About</div>
+    <h1>What Chaptr is.</h1>
+    <p class="lead">A reading habit app built around the idea that <em>time</em> is the richest signal you can give a reader.</p>
+
+    <h2>The wedge</h2>
+    <p>Goodreads owns metadata and social proof but doesn't help you build a reading habit. Bookly nailed the timer + streak loop but has no discovery engine. Neither uses an LLM. Chaptr connects the two: every minute you spend in a book is data Claude can use to recommend what comes next, when to read it, and how to get back into it when you stall.</p>
+
+    <h2>What you can do</h2>
+    <ul>
+      <li><strong>Track sessions</strong> — start, pause, stop a real-time reading timer. Log pages and mood at the end.</li>
+      <li><strong>Keep streaks</strong> — daily goal ring, consecutive-day count, weekly streak freezes Bookly never had.</li>
+      <li><strong>Build shelves</strong> — three system shelves (Reading / Want / Read) plus unlimited custom shelves with privacy controls.</li>
+      <li><strong>Ask Claude</strong> — natural-language search, "How this fits you" blurbs per book, weekly Reader Persona.</li>
+      <li><strong>Read together</strong> — pair-read with a friend, share a chat thread, race in group challenges, see your circle's activity.</li>
+      <li><strong>Cloud sync</strong> — sign in and your data follows you across devices.</li>
+    </ul>
+
+    <h2>How AI is used</h2>
+    <p>Every AI surface is opt-out and listed in <a href="profile.html">Profile → Claude · trust & control</a>. Claude reads your aggregated reading data (pace, genre patterns, mood) but never your private shelves or reviews. Each recommendation cites the signals it used.</p>
+
+    <h2>The team</h2>
+    <p>Chaptr is currently a prototype built solo. Open issues at <a href="https://github.com/chaptr-app/chaptr">github.com/chaptr-app/chaptr</a>.</p>
+
+    <p class="muted" style="margin-top:32px; font-size:.85rem;">
+      <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a>
+    </p>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container row">
+    <span>© Chaptr — a prototype.</span>
+    <span class="muted">Time is the new star rating.</span>
+  </div>
+</footer>
+
+<script src="app.js?v=31"></script>
+</body>
+</html>

@@ -4,11 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#FAF7F2">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Chaptr">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Library · Chaptr</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 <style>
   .lib-hero { margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: stretch; }
   @media (max-width: 880px) { .lib-hero { grid-template-columns: 1fr; } }
@@ -251,11 +258,11 @@
 <footer class="footer">
   <div class="container row">
     <span>© Chaptr — a prototype.</span>
-    <span class="muted">Time is the new star rating.</span>
+    <span class="muted"><a href="about.html">About</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · Time is the new star rating.</span>
   </div>
 </footer>
 
-<script src="app.js?v=30"></script>
+<script src="app.js?v=31"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,

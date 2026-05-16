@@ -1867,6 +1867,12 @@ function mountNowReadingPill() {
 function bootCommon() {
   try { tryEarnStreakFreeze(); } catch {}
   try { startBackgroundPauseWatcher(); } catch {}
+  // PWA service worker — install once. Failures are non-fatal.
+  try {
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      navigator.serviceWorker.register('/chaptr/service-worker.js').catch(() => {});
+    }
+  } catch {}
   mountBottomNav();
   mountNowReadingPill();
   // Kick off auth + backend sync if configured. Runs in background — UI doesn't wait.
