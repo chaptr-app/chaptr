@@ -75,6 +75,17 @@ CREATE TABLE IF NOT EXISTS custom_shelves (
 );
 CREATE INDEX IF NOT EXISTS idx_shelves_owner_vis ON custom_shelves(owner_id, visibility);
 
+-- Phase V3 — collaborative shelves. Each row is an editor on someone else's shelf.
+-- The owner's row in custom_shelves still holds the source of truth.
+CREATE TABLE IF NOT EXISTS shelf_members (
+  shelf_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'editor',  -- 'editor' for now
+  added_at TEXT NOT NULL,
+  PRIMARY KEY (shelf_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sm_user ON shelf_members(user_id);
+
 -- Phase 4 — reading buddies. Two-person pair reads with a shared message thread.
 CREATE TABLE IF NOT EXISTS pair_reads (
   id TEXT PRIMARY KEY,

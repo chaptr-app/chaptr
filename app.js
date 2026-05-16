@@ -1525,9 +1525,83 @@ const ShelvesBackend = {
       return resp.ok ? data : null;
     } catch { return null; }
   },
+
+  // Phase V3 — collaborative shelves
+  async fetchMyShelves() {
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) return null;
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return null;
+    try {
+      const resp = await fetch(Sync.workerUrl() + '/me/shelves', {
+        headers: await Sync.authHeaders(),
+      });
+      const data = await resp.json().catch(() => ({}));
+      return resp.ok ? data : null;
+    } catch { return null; }
+  },
+  async members(shelfId) {
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return null;
+    try {
+      const resp = await fetch(Sync.workerUrl() + '/shelves/' + encodeURIComponent(shelfId) + '/members', {
+        headers: await Sync.authHeaders(),
+      });
+      const data = await resp.json().catch(() => ({}));
+      return resp.ok ? data : null;
+    } catch { return null; }
+  },
+  async addMember(shelfId, username) {
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) throw new Error('Sign in to invite editors');
+    const resp = await fetch(Sync.workerUrl() + '/shelves/' + encodeURIComponent(shelfId) + '/members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await Sync.authHeaders()) },
+      body: JSON.stringify({ username }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data?.error || ('HTTP ' + resp.status));
+    return data;
+  },
+  async removeMember(shelfId, username) {
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) throw new Error('Sign in required');
+    const resp = await fetch(Sync.workerUrl() + '/shelves/' + encodeURIComponent(shelfId) + '/members?username=' + encodeURIComponent(username), {
+      method: 'DELETE',
+      headers: await Sync.authHeaders(),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data?.error || ('HTTP ' + resp.status));
+    return data;
+  },
 };
 function customShelvesContaining(bookId) {
   return listCustomShelves().filter(s => s.books.includes(bookId));
+}
+
+// Merge a server-fetched shared shelf into local custom shelves so it shows
+// up in tabs/lists. Marked with `shared:true` so the UI can distinguish.
+function upsertSharedShelfLocal(shelf) {
+  const m = getCustomShelves();
+  const existing = m[shelf.id] || {};
+  m[shelf.id] = {
+    ...existing,
+    id: shelf.id,
+    name: shelf.name,
+    books: shelf.books || [],
+    visibility: shelf.visibility || 'public',
+    createdAt: existing.createdAt || new Date().toISOString(),
+    shared: true,
+    myRole: shelf.myRole || 'editor',
+    owner: shelf.owner || null,
+  };
+  setCustomShelvesMap(m);
+}
+async function syncSharedShelves() {
+  if (typeof Auth === 'undefined' || !Auth.signedIn()) return;
+  if (typeof Sync === 'undefined' || !Sync.enabled()) return;
+  const data = await ShelvesBackend.fetchMyShelves();
+  if (!data?.shelves) return;
+  // Apply quietly — Sync._loading guard prevents triggering snapshot push
+  Sync._loading = true;
+  try {
+    for (const sh of data.shelves) upsertSharedShelfLocal(sh);
+  } finally { Sync._loading = false; }
 }
 
 // ---------- per-book WPM (smoothed over trailing 10 sessions) ----------
@@ -1835,7 +1909,7 @@ window.Chaptr = {
   getShelves, setShelves, shelfFor, moveToShelf,
   listCustomShelves, getCustomShelf, createCustomShelf, renameCustomShelf, deleteCustomShelf,
   setCustomShelfVisibility, addToCustomShelf, removeFromCustomShelf, customShelvesContaining,
-  ShelvesBackend,
+  ShelvesBackend, syncSharedShelves,
   getCurrentBookId, setCurrentBookId,
   getBookProgress, setBookProgress,
   getReviews, getReview, setReview, ReviewsBackend, Social, Stats, PairReads, Coach,

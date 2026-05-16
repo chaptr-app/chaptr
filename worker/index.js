@@ -262,6 +262,16 @@ async function ensureSchema(env) {
   `).run();
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_shelves_owner_vis ON custom_shelves(owner_id, visibility)`).run();
   await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS shelf_members (
+      shelf_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'editor',
+      added_at TEXT NOT NULL,
+      PRIMARY KEY (shelf_id, user_id)
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_sm_user ON shelf_members(user_id)`).run();
+  await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS pair_reads (
       id TEXT PRIMARY KEY,
       book_id TEXT NOT NULL,
@@ -731,9 +741,19 @@ async function handleShelfUpsert(request, env) {
 
   await ensureSchema(env);
   const now = new Date().toISOString();
-  // Ownership check: if a row with this id exists owned by someone else, refuse.
+  // Permission check: owner OR member with editor role can upsert.
   const existing = await env.DB.prepare('SELECT owner_id, created_at FROM custom_shelves WHERE id = ?').bind(id).first();
-  if (existing && existing.owner_id !== userId) return json({ error: 'Shelf belongs to another user' }, 403);
+  if (existing && existing.owner_id !== userId) {
+    const member = await env.DB.prepare(
+      `SELECT role FROM shelf_members WHERE shelf_id = ? AND user_id = ?`
+    ).bind(id, userId).first();
+    if (!member || member.role !== 'editor') return json({ error: 'Not allowed to edit this shelf' }, 403);
+    // Editor edit: keep the original owner_id, only update mutable fields.
+    await env.DB.prepare(`
+      UPDATE custom_shelves SET name = ?, books = ?, visibility = ?, updated_at = ? WHERE id = ?
+    `).bind(cleanName, JSON.stringify(arr), v, now, id).run();
+    return json({ ok: true, id, visibility: v, updatedAt: now, role: 'editor' });
+  }
   const createdAt = existing?.created_at || now;
   await env.DB.prepare(`
     INSERT INTO custom_shelves (id, owner_id, name, books, visibility, created_at, updated_at)
@@ -744,7 +764,7 @@ async function handleShelfUpsert(request, env) {
       visibility = excluded.visibility,
       updated_at = excluded.updated_at
   `).bind(id, userId, cleanName, JSON.stringify(arr), v, createdAt, now).run();
-  return json({ ok: true, id, visibility: v, updatedAt: now });
+  return json({ ok: true, id, visibility: v, updatedAt: now, role: 'owner' });
 }
 
 async function handleShelfDelete(request, env) {
@@ -755,7 +775,118 @@ async function handleShelfDelete(request, env) {
   if (!id || !SHELF_ID_RE.test(id)) return json({ error: 'Bad shelf id' }, 400);
   await ensureSchema(env);
   await env.DB.prepare('DELETE FROM custom_shelves WHERE id = ? AND owner_id = ?').bind(id, userId).run();
+  await env.DB.prepare('DELETE FROM shelf_members WHERE shelf_id = ?').bind(id).run();
   return json({ ok: true });
+}
+
+// ---------- Collaborative shelf members (Phase V3) ----------
+async function handleShelfMemberAdd(request, env, shelfId) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!SHELF_ID_RE.test(shelfId)) return json({ error: 'Bad shelf id' }, 400);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const username = String(body?.username || '').toLowerCase();
+  if (!USERNAME_RE.test(username)) return json({ error: 'Bad username' }, 400);
+  await ensureSchema(env);
+  const shelf = await env.DB.prepare('SELECT owner_id FROM custom_shelves WHERE id = ?').bind(shelfId).first();
+  if (!shelf) return json({ error: 'Shelf not found' }, 404);
+  if (shelf.owner_id !== userId) return json({ error: 'Only the owner can add editors' }, 403);
+  const target = await env.DB.prepare('SELECT id FROM users WHERE username = ?').bind(username).first();
+  if (!target) return json({ error: 'User not found' }, 404);
+  if (target.id === userId) return json({ error: 'You already own this shelf' }, 400);
+  const now = new Date().toISOString();
+  try {
+    await env.DB.prepare(`
+      INSERT INTO shelf_members (shelf_id, user_id, role, added_at)
+      VALUES (?, ?, 'editor', ?)
+    `).bind(shelfId, target.id, now).run();
+  } catch {
+    return json({ error: 'Already an editor' }, 409);
+  }
+  return json({ ok: true });
+}
+
+async function handleShelfMemberRemove(request, env, shelfId) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!SHELF_ID_RE.test(shelfId)) return json({ error: 'Bad shelf id' }, 400);
+  const url = new URL(request.url);
+  const username = String(url.searchParams.get('username') || '').toLowerCase();
+  if (!USERNAME_RE.test(username)) return json({ error: 'Bad username' }, 400);
+  await ensureSchema(env);
+  const shelf = await env.DB.prepare('SELECT owner_id FROM custom_shelves WHERE id = ?').bind(shelfId).first();
+  if (!shelf) return json({ error: 'Shelf not found' }, 404);
+  // Allow either: owner kicks anyone, or editor self-removes.
+  const target = await env.DB.prepare('SELECT id FROM users WHERE username = ?').bind(username).first();
+  if (!target) return json({ error: 'User not found' }, 404);
+  if (shelf.owner_id !== userId && target.id !== userId) return json({ error: 'Not allowed' }, 403);
+  await env.DB.prepare('DELETE FROM shelf_members WHERE shelf_id = ? AND user_id = ?').bind(shelfId, target.id).run();
+  return json({ ok: true });
+}
+
+async function handleShelfMembers(request, env, shelfId) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!SHELF_ID_RE.test(shelfId)) return json({ error: 'Bad shelf id' }, 400);
+  await ensureSchema(env);
+  const shelf = await env.DB.prepare(
+    `SELECT cs.owner_id, u.username, u.display_name, u.avatar_hue
+     FROM custom_shelves cs
+     LEFT JOIN users u ON u.id = cs.owner_id
+     WHERE cs.id = ?`
+  ).bind(shelfId).first();
+  if (!shelf) return json({ error: 'Shelf not found' }, 404);
+  // Caller must be owner or editor.
+  if (shelf.owner_id !== userId) {
+    const m = await env.DB.prepare(
+      'SELECT role FROM shelf_members WHERE shelf_id = ? AND user_id = ?'
+    ).bind(shelfId, userId).first();
+    if (!m) return json({ error: 'Not allowed' }, 403);
+  }
+  const editors = await env.DB.prepare(`
+    SELECT u.id, u.username, u.display_name, u.avatar_hue, m.added_at
+    FROM shelf_members m
+    JOIN users u ON u.id = m.user_id
+    WHERE m.shelf_id = ?
+    ORDER BY m.added_at
+  `).bind(shelfId).all();
+  return json({
+    owner: publicProfile({ id: shelf.owner_id, username: shelf.username, display_name: shelf.display_name, avatar_hue: shelf.avatar_hue }),
+    editors: (editors?.results || []).map(publicProfile),
+  });
+}
+
+async function handleMyShelves(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  await ensureSchema(env);
+  // Owned + ones I'm an editor on.
+  const rows = await env.DB.prepare(`
+    SELECT cs.id, cs.owner_id, cs.name, cs.books, cs.visibility, cs.updated_at,
+           u.username AS owner_username, u.display_name AS owner_display, u.avatar_hue AS owner_hue,
+           CASE WHEN cs.owner_id = ? THEN 'owner' ELSE 'editor' END AS my_role
+    FROM custom_shelves cs
+    LEFT JOIN users u ON u.id = cs.owner_id
+    WHERE cs.owner_id = ?
+       OR cs.id IN (SELECT shelf_id FROM shelf_members WHERE user_id = ?)
+    ORDER BY cs.updated_at DESC
+  `).bind(userId, userId, userId).all();
+  return json({
+    shelves: (rows?.results || []).map(r => {
+      let books = [];
+      try { books = JSON.parse(r.books); } catch {}
+      return {
+        id: r.id,
+        name: r.name,
+        books,
+        visibility: r.visibility,
+        updatedAt: r.updated_at,
+        myRole: r.my_role,
+        owner: { id: r.owner_id, username: r.owner_username, displayName: r.owner_display, avatarHue: r.owner_hue },
+      };
+    }),
+  });
 }
 
 async function handleUserShelves(request, env, username) {
@@ -1333,6 +1464,14 @@ export default {
     // Shelves (Phase 3E)
     if (path === '/shelves' && request.method === 'POST') return handleShelfUpsert(request, env);
     if (path === '/shelves' && request.method === 'DELETE') return handleShelfDelete(request, env);
+    // Collaborative shelves (Phase V3)
+    if (path === '/me/shelves' && request.method === 'GET') return handleMyShelves(request, env);
+    const sMembersGet = path.match(/^\/shelves\/([^/]+)\/members$/);
+    if (sMembersGet && request.method === 'GET') return handleShelfMembers(request, env, sMembersGet[1]);
+    const sMemberAdd = path.match(/^\/shelves\/([^/]+)\/members$/);
+    if (sMemberAdd && request.method === 'POST') return handleShelfMemberAdd(request, env, sMemberAdd[1]);
+    const sMemberDel = path.match(/^\/shelves\/([^/]+)\/members$/);
+    if (sMemberDel && request.method === 'DELETE') return handleShelfMemberRemove(request, env, sMemberDel[1]);
 
     // Coach (Phase V3)
     if (path === '/coach/persona' && request.method === 'POST') return handleCoachPersona(request, env);

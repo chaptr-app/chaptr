@@ -552,7 +552,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
@@ -785,7 +785,12 @@
       renderAuth();
       renderSyncStatus();
     });
-    Auth.on(() => { renderAuth(); renderSyncStatus(); });
+    Auth.on(() => {
+      renderAuth();
+      renderSyncStatus();
+      if (getAISettings().readerPersona) renderPersonaClaude();
+      renderFriendChallenges();
+    });
 
     // Phase 2B — username save
     document.getElementById('saveUsernameBtn').addEventListener('click', async () => {
@@ -1008,6 +1013,12 @@
     const textEl = document.getElementById('personaText');
     const sigEl = document.getElementById('personaSignals');
     const tsEl = document.getElementById('personaTs');
+
+    // Race fix: if Clerk is configured but hasn't loaded yet, wait. Otherwise the
+    // first render after page load sees signed-in=false and shows the local stub.
+    if (Auth.configured() && !Auth.signedIn()) {
+      try { await Auth.load(); } catch {}
+    }
 
     if (!Auth.signedIn() || !Sync.enabled()) {
       // Not signed in / no worker — fall back to the existing local renderPersona stub

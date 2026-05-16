@@ -213,6 +213,16 @@
       </div>
       <div class="muted" id="editShelfVisHint" style="font-size:.78rem; margin-top:6px;">Private shelves never leave this device.</div>
     </div>
+    <div id="editShelfMembers" style="margin-top:18px; display:none;">
+      <label style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600;">Editors · V3</label>
+      <div id="editShelfMembersList" style="display:flex; flex-direction:column; gap:6px; margin-top:8px;"></div>
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        <input type="text" id="editShelfInviteInput" placeholder="@username"
+          style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink); font-family:monospace; font-size:.85rem;">
+        <button class="btn btn-outline btn-sm" id="editShelfInviteBtn">Invite</button>
+      </div>
+      <div class="muted" id="editShelfMembersHint" style="font-size:.75rem; margin-top:6px;">Editors can add or remove books on this shelf.</div>
+    </div>
     <div class="dlg-actions">
       <button class="btn btn-ghost btn-sm danger" id="deleteShelfBtn" style="color:var(--danger);">Delete shelf</button>
       <div class="right">
@@ -281,7 +291,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
@@ -290,7 +300,7 @@
           addToCustomShelf, removeFromCustomShelf,
           customShelvesContaining,
           getSmartShelves, getSmartShelfById, isSmartShelfId,
-          getBookProgress, Coach,
+          getBookProgress, Coach, ShelvesBackend, syncSharedShelves, Auth, Sync,
           renderSpoilers } = window.Chaptr;
 
   function starString(rating) {
@@ -381,7 +391,8 @@
       const sh = getCustomShelf(activeShelf);
       const vis = sh?.visibility || 'private';
       const visIcon = vis === 'public' ? '🌍 Public' : vis === 'friends' ? '👥 Friends' : '🔒 Private';
-      desc = meta.desc + ' · ' + visIcon;
+      const sharedBit = sh?.shared ? ` · 👥 Shared (${sh.myRole})` : '';
+      desc = meta.desc + ' · ' + visIcon + sharedBit;
     }
     document.getElementById('shelfDesc').textContent = desc;
     const actions = document.getElementById('shelfActions');
@@ -678,7 +689,7 @@
     btn.addEventListener('click', () => { editShelfVis = btn.dataset.vis; paintEditShelfVis(); });
   });
 
-  function openEditShelf(id) {
+  async function openEditShelf(id) {
     editShelfId = id;
     const sh = getCustomShelf(id);
     if (!sh) return;
@@ -688,7 +699,62 @@
     paintEditShelfVis();
     editDlg.classList.add('open');
     setTimeout(() => document.getElementById('editShelfName').focus(), 50);
+
+    // Members section: only fetch when shelf is non-private + signed in
+    const memberWrap = document.getElementById('editShelfMembers');
+    if (sh.shared && sh.myRole !== 'owner') {
+      // I'm an editor on someone else's shelf — show owner + a Leave button
+      memberWrap.style.display = '';
+      const ownerName = sh.owner?.displayName || sh.owner?.username || 'someone';
+      document.getElementById('editShelfMembersList').innerHTML = `<div style="padding:8px; background:var(--surface-2); border-radius:var(--r-sm); font-size:.85rem;">Shared by <strong>${escapeHtml(ownerName)}</strong>. You can edit but can't manage editors.</div>`;
+      document.getElementById('editShelfInviteInput').style.display = 'none';
+      document.getElementById('editShelfInviteBtn').style.display = 'none';
+      return;
+    }
+    if (!Auth.signedIn() || !Sync.enabled() || editShelfVis === 'private') {
+      memberWrap.style.display = 'none';
+      return;
+    }
+    memberWrap.style.display = '';
+    document.getElementById('editShelfInviteInput').style.display = '';
+    document.getElementById('editShelfInviteBtn').style.display = '';
+    await refreshMembersList(id);
   }
+
+  async function refreshMembersList(shelfId) {
+    const list = document.getElementById('editShelfMembersList');
+    list.innerHTML = '<div class="muted" style="font-size:.85rem;">Loading editors…</div>';
+    const data = await ShelvesBackend.members(shelfId);
+    if (!data) { list.innerHTML = '<div class="muted" style="font-size:.85rem;">Could not load editors.</div>'; return; }
+    if (!data.editors?.length) { list.innerHTML = '<div class="muted" style="font-size:.85rem;">No editors yet. Invite by username below.</div>'; return; }
+    list.innerHTML = data.editors.map(e => {
+      const name = e.displayName || e.username || 'Reader';
+      return `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:var(--surface-2); border-radius:var(--r-sm); font-size:.85rem;">
+        <span><strong>${escapeHtml(name)}</strong> <span class="muted">@${escapeHtml(e.username || '—')}</span></span>
+        <button class="btn btn-ghost btn-sm" data-rm-editor="${e.username}" style="color:var(--danger);">Remove</button>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('[data-rm-editor]').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try { await ShelvesBackend.removeMember(shelfId, btn.dataset.rmEditor); await refreshMembersList(shelfId); }
+      catch (e) { alert(e.message); btn.disabled = false; }
+    }));
+  }
+
+  document.getElementById('editShelfInviteBtn').addEventListener('click', async () => {
+    if (!editShelfId) return;
+    const input = document.getElementById('editShelfInviteInput');
+    const u = input.value.trim().replace(/^@/, '').toLowerCase();
+    if (!u) return;
+    const btn = document.getElementById('editShelfInviteBtn');
+    btn.disabled = true; btn.textContent = 'Inviting…';
+    try {
+      await ShelvesBackend.addMember(editShelfId, u);
+      input.value = '';
+      await refreshMembersList(editShelfId);
+    } catch (e) { alert(e.message); }
+    finally { btn.disabled = false; btn.textContent = 'Invite'; }
+  });
   document.getElementById('editShelfCancel').addEventListener('click', () => editDlg.classList.remove('open'));
   editDlg.addEventListener('click', (e) => { if (e.target === editDlg) editDlg.classList.remove('open'); });
   document.getElementById('editShelfSave').addEventListener('click', () => {
@@ -735,6 +801,14 @@
   });
 
   renderAll();
+
+  // V3 — pull in any shelves I've been invited to edit, then re-render.
+  (async () => {
+    if (Auth?.configured?.()) { try { await Auth.load(); } catch {} }
+    if (Auth?.signedIn?.() && Sync?.enabled?.()) {
+      try { await syncSharedShelves(); renderAll(); } catch {}
+    }
+  })();
 </script>
 </body>
 </html>
