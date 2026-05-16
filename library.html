@@ -255,13 +255,13 @@
   </div>
 </footer>
 
-<script src="app.js?v=27"></script>
+<script src="app.js?v=28"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
           getReviews, FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
           listCustomShelves, getAISettings, ReviewsBackend,
-          Social, Auth, Stats, renderSpoilers,
+          Social, Auth, Stats, Coach, renderSpoilers,
           Store, K, OL } = window.Chaptr;
 
   // Personal WPM with a fallback. Used for "length in hours for you" math.
@@ -348,13 +348,15 @@
           <div class="public-snippet" data-snippet-idx="${i}" style="display:none; font-size:.8rem; color:var(--ink-2); font-style:italic; margin-top:6px; padding-top:6px; border-top:1px dashed var(--border);"></div>
         </div>
         <div class="why"><span class="label">Why this?</span> ${rec.why}</div>
+        <div class="why" data-fit-idx="${i}" style="display:none; background:var(--primary-tint); border-color:#DCE5DE;"><span class="label">How this fits you</span> <span class="fit-text"></span></div>
       </div>`;
     }).join('');
     recs.forEach((rec, i) => {
       const node = el.querySelector(`[data-cover-idx="${i}"]`);
       OL.applyCover(node, findBook(rec.bookId), 'M');
     });
-    // Community ratings + timing + public review snippet — lazy loaded. Silent on failure.
+    // Community ratings + timing + public review snippet + Claude "How this fits you"
+    // — all lazy loaded. Silent on failure.
     recs.forEach(async (rec, i) => {
       const node = el.querySelector(`[data-com-idx="${i}"]`);
       const parts = [];
@@ -381,6 +383,22 @@
         }
       } catch {}
     });
+    // V3 "How this fits you" — only when signed in. Stagger to avoid hammering the worker.
+    if (Auth.signedIn() && getAISettings().forYou) {
+      recs.forEach((rec, i) => {
+        setTimeout(async () => {
+          const b = findBook(rec.bookId);
+          const r = await Coach.bookFit(b);
+          if (r?.text) {
+            const node = el.querySelector(`[data-fit-idx="${i}"]`);
+            if (node) {
+              node.style.display = '';
+              node.querySelector('.fit-text').textContent = r.text;
+            }
+          }
+        }, i * 250); // 250ms stagger between requests
+      });
+    }
   }
 
   function wireBrowseChips() {

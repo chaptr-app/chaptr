@@ -97,3 +97,24 @@ CREATE TABLE IF NOT EXISTS pair_read_messages (
   FOREIGN KEY (pair_read_id) REFERENCES pair_reads(id)
 );
 CREATE INDEX IF NOT EXISTS idx_pr_messages_pair ON pair_read_messages(pair_read_id, created_at);
+
+-- Phase V3 — friend challenges with leaderboard
+CREATE TABLE IF NOT EXISTS friend_challenges (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,                 -- 'books' | 'hours'
+  target INTEGER NOT NULL,
+  deadline TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fc_owner ON friend_challenges(owner_id);
+
+CREATE TABLE IF NOT EXISTS friend_challenge_members (
+  challenge_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'invited',   -- 'invited' | 'joined' | 'declined'
+  joined_at TEXT NOT NULL,
+  PRIMARY KEY (challenge_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_fcm_user ON friend_challenge_members(user_id, status);

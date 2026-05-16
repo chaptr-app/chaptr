@@ -284,6 +284,28 @@ async function ensureSchema(env) {
     )
   `).run();
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_pr_messages_pair ON pair_read_messages(pair_read_id, created_at)`).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS friend_challenges (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      target INTEGER NOT NULL,
+      deadline TEXT,
+      created_at TEXT NOT NULL
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_fc_owner ON friend_challenges(owner_id)`).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS friend_challenge_members (
+      challenge_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'invited',
+      joined_at TEXT NOT NULL,
+      PRIMARY KEY (challenge_id, user_id)
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_fcm_user ON friend_challenge_members(user_id, status)`).run();
 }
 
 // Helper: is requester (or anonymous) allowed to view a row with this visibility owned by ownerId?
@@ -904,6 +926,225 @@ Write the recap + re-entry response.`;
   } catch (e) { return json({ error: e.message }, 502); }
 }
 
+// ---------- "How this fits you" book blurbs (Phase V3) ----------
+const BOOK_FIT_SYSTEM = `You are Chaptr's book-recommendation explainer.
+The user is looking at one specific book card. Write ONE plain sentence (15-30 words)
+that explains why this book fits THIS reader, referencing at least one of their stats
+explicitly (WPM, top genre, session length, recent mood, completion rate). No fluff,
+no marketing speak. Be specific and a little surprising. Plain text only.`;
+
+async function handleCoachBookFit(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!env.ANTHROPIC_API_KEY) return json({ error: 'Anthropic key not configured' }, 503);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { title, author, genre, pages, dna } = body || {};
+  if (!title || !author) return json({ error: 'Missing book metadata' }, 400);
+  const userMsg = `Book: "${title}" by ${author}
+Genre: ${genre || 'unknown'}
+Pages: ${pages || 'unknown'}
+
+Reader DNA:
+- WPM: ${dna?.wpm ?? 'unknown'}
+- Avg session: ${dna?.avgSession ?? 'unknown'} min
+- Top genre: ${dna?.topGenre ?? 'unknown'}
+- Recent mood: ${dna?.mood ?? 'unknown'}
+- Hours-to-finish at their pace: ${pages && dna?.wpm ? Math.round((pages * 275) / dna.wpm / 60 * 10) / 10 : 'unknown'}
+
+Write the one-sentence fit.`;
+  try {
+    const text = await callClaudeText(env, BOOK_FIT_SYSTEM, userMsg);
+    return json({ text });
+  } catch (e) { return json({ error: e.message }, 502); }
+}
+
+// ---------- Friend challenges (Phase V3) ----------
+const FC_TYPES = new Set(['books', 'hours']);
+const FC_ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
+
+async function handleFriendChallengeCreate(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { name, type, target, deadline, invitees } = body || {};
+  if (!name || typeof name !== 'string') return json({ error: 'Missing name' }, 400);
+  if (!FC_TYPES.has(type)) return json({ error: 'type must be books or hours' }, 400);
+  const t = parseInt(target, 10);
+  if (!Number.isFinite(t) || t < 1 || t > 100000) return json({ error: 'Bad target' }, 400);
+  const inviteeList = Array.isArray(invitees) ? invitees.filter(u => typeof u === 'string') : [];
+
+  await ensureSchema(env);
+  const id = genId('fc');
+  const now = new Date().toISOString();
+  const cleanDeadline = deadline && /^\d{4}-\d{2}-\d{2}$/.test(deadline) ? deadline : null;
+  await env.DB.prepare(`
+    INSERT INTO friend_challenges (id, owner_id, name, type, target, deadline, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(id, userId, name.slice(0, 80), type, t, cleanDeadline, now).run();
+  // Owner auto-joins.
+  await env.DB.prepare(`
+    INSERT INTO friend_challenge_members (challenge_id, user_id, status, joined_at)
+    VALUES (?, ?, 'joined', ?)
+  `).bind(id, userId, now).run();
+  // Resolve invitees by username and insert as 'invited'.
+  for (const username of inviteeList.slice(0, 20)) {
+    const u = String(username).toLowerCase();
+    if (!USERNAME_RE.test(u)) continue;
+    const target = await env.DB.prepare('SELECT id FROM users WHERE username = ?').bind(u).first();
+    if (!target || target.id === userId) continue;
+    try {
+      await env.DB.prepare(`
+        INSERT INTO friend_challenge_members (challenge_id, user_id, status, joined_at)
+        VALUES (?, ?, 'invited', ?)
+      `).bind(id, target.id, now).run();
+    } catch {} // ignore duplicate
+  }
+  return json({ ok: true, id });
+}
+
+async function handleFriendChallengeList(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  await ensureSchema(env);
+  const rows = await env.DB.prepare(`
+    SELECT fc.id, fc.owner_id, fc.name, fc.type, fc.target, fc.deadline, fc.created_at,
+           m.status AS my_status,
+           u.username AS owner_username, u.display_name AS owner_display
+    FROM friend_challenges fc
+    JOIN friend_challenge_members m ON m.challenge_id = fc.id AND m.user_id = ?
+    LEFT JOIN users u ON u.id = fc.owner_id
+    ORDER BY fc.created_at DESC
+  `).bind(userId).all();
+  const items = (rows?.results || []).map(r => ({
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    target: r.target,
+    deadline: r.deadline,
+    createdAt: r.created_at,
+    myStatus: r.my_status,
+    youAreOwner: r.owner_id === userId,
+    owner: { username: r.owner_username, displayName: r.owner_display },
+  }));
+  return json({ items });
+}
+
+async function _verifyChallengeMember(env, userId, challengeId) {
+  const row = await env.DB.prepare(`
+    SELECT fc.id, fc.owner_id, fc.name, fc.type, fc.target, fc.deadline, fc.created_at, m.status AS my_status
+    FROM friend_challenges fc
+    JOIN friend_challenge_members m ON m.challenge_id = fc.id AND m.user_id = ?
+    WHERE fc.id = ?
+  `).bind(userId, challengeId).first();
+  if (!row) return { err: json({ error: 'Not a member' }, 403) };
+  return { row };
+}
+
+async function handleFriendChallengeStatus(request, env, challengeId, newStatus) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!FC_ID_RE.test(challengeId)) return json({ error: 'Bad id' }, 400);
+  await ensureSchema(env);
+  // Only invitees can join/decline. Owner can leave (effectively delete).
+  const m = await env.DB.prepare(
+    'SELECT status FROM friend_challenge_members WHERE challenge_id = ? AND user_id = ?'
+  ).bind(challengeId, userId).first();
+  if (!m) return json({ error: 'Not invited' }, 404);
+  await env.DB.prepare(
+    'UPDATE friend_challenge_members SET status = ? WHERE challenge_id = ? AND user_id = ?'
+  ).bind(newStatus, challengeId, userId).run();
+  return json({ ok: true, status: newStatus });
+}
+
+async function handleFriendChallengeGet(request, env, challengeId) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!FC_ID_RE.test(challengeId)) return json({ error: 'Bad id' }, 400);
+  await ensureSchema(env);
+  const { row, err } = await _verifyChallengeMember(env, userId, challengeId);
+  if (err) return err;
+
+  // Fetch all members + their public profiles
+  const memberRows = await env.DB.prepare(`
+    SELECT m.user_id, m.status, m.joined_at,
+           u.username, u.display_name, u.avatar_hue
+    FROM friend_challenge_members m
+    LEFT JOIN users u ON u.id = m.user_id
+    WHERE m.challenge_id = ?
+  `).bind(challengeId).all();
+  const members = memberRows?.results || [];
+
+  // Compute progress for each member (only ones that actually joined).
+  const joinedIds = members.filter(m => m.status === 'joined').map(m => m.user_id);
+  const progressMap = {};
+  if (joinedIds.length) {
+    const placeholders = joinedIds.map(() => '?').join(',');
+    if (row.type === 'books') {
+      const stmt = await env.DB.prepare(`
+        SELECT user_id, COUNT(*) AS cnt
+        FROM book_finishes
+        WHERE finished_at >= ? AND user_id IN (${placeholders})
+        GROUP BY user_id
+      `).bind(row.created_at, ...joinedIds).all();
+      for (const r of (stmt?.results || [])) progressMap[r.user_id] = { current: r.cnt, target: row.target };
+    } else {
+      const stmt = await env.DB.prepare(`
+        SELECT user_id, SUM(total_minutes) AS mins
+        FROM book_finishes
+        WHERE finished_at >= ? AND user_id IN (${placeholders})
+        GROUP BY user_id
+      `).bind(row.created_at, ...joinedIds).all();
+      for (const r of (stmt?.results || [])) {
+        const hours = Math.round((r.mins || 0) / 60 * 10) / 10;
+        progressMap[r.user_id] = { current: hours, target: row.target };
+      }
+    }
+  }
+
+  return json({
+    challenge: {
+      id: row.id, name: row.name, type: row.type, target: row.target,
+      deadline: row.deadline, createdAt: row.created_at,
+      youAreOwner: row.owner_id === userId,
+    },
+    members: members.map(m => ({
+      profile: publicProfile({ id: m.user_id, username: m.username, display_name: m.display_name, avatar_hue: m.avatar_hue }),
+      status: m.status,
+      progress: progressMap[m.user_id] || { current: 0, target: row.target },
+    })).sort((a, b) => (b.progress.current || 0) - (a.progress.current || 0)),
+  });
+}
+
+async function handleFriendChallengeInvite(request, env, challengeId) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!FC_ID_RE.test(challengeId)) return json({ error: 'Bad id' }, 400);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const username = String(body?.username || '').toLowerCase();
+  if (!USERNAME_RE.test(username)) return json({ error: 'Bad username' }, 400);
+  await ensureSchema(env);
+  // Only the owner can invite more
+  const fc = await env.DB.prepare('SELECT owner_id FROM friend_challenges WHERE id = ?').bind(challengeId).first();
+  if (!fc) return json({ error: 'Not found' }, 404);
+  if (fc.owner_id !== userId) return json({ error: 'Only the owner can invite' }, 403);
+  const target = await env.DB.prepare('SELECT id FROM users WHERE username = ?').bind(username).first();
+  if (!target) return json({ error: 'User not found' }, 404);
+  if (target.id === userId) return json({ error: 'Already in your own challenge' }, 400);
+  const now = new Date().toISOString();
+  try {
+    await env.DB.prepare(`
+      INSERT INTO friend_challenge_members (challenge_id, user_id, status, joined_at)
+      VALUES (?, ?, 'invited', ?)
+    `).bind(challengeId, target.id, now).run();
+  } catch {
+    return json({ error: 'Already invited or member' }, 409);
+  }
+  return json({ ok: true });
+}
+
 // ---------- Reading buddies (Phase 4) ----------
 const PAIR_ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
 
@@ -1096,6 +1337,19 @@ export default {
     // Coach (Phase V3)
     if (path === '/coach/persona' && request.method === 'POST') return handleCoachPersona(request, env);
     if (path === '/coach/stall-recovery' && request.method === 'POST') return handleCoachStallRecovery(request, env);
+    if (path === '/coach/book-fit' && request.method === 'POST') return handleCoachBookFit(request, env);
+
+    // Friend challenges (Phase V3)
+    if (path === '/friend-challenges' && request.method === 'POST') return handleFriendChallengeCreate(request, env);
+    if (path === '/friend-challenges' && request.method === 'GET') return handleFriendChallengeList(request, env);
+    const fcGetMatch = path.match(/^\/friend-challenges\/([^/]+)$/);
+    if (fcGetMatch && request.method === 'GET') return handleFriendChallengeGet(request, env, fcGetMatch[1]);
+    const fcJoinMatch = path.match(/^\/friend-challenges\/([^/]+)\/join$/);
+    if (fcJoinMatch && request.method === 'POST') return handleFriendChallengeStatus(request, env, fcJoinMatch[1], 'joined');
+    const fcDeclineMatch = path.match(/^\/friend-challenges\/([^/]+)\/decline$/);
+    if (fcDeclineMatch && request.method === 'POST') return handleFriendChallengeStatus(request, env, fcDeclineMatch[1], 'declined');
+    const fcInviteMatch = path.match(/^\/friend-challenges\/([^/]+)\/invite$/);
+    if (fcInviteMatch && request.method === 'POST') return handleFriendChallengeInvite(request, env, fcInviteMatch[1]);
 
     // Reading buddies (Phase 4)
     if (path === '/pair-reads' && request.method === 'POST') return handlePairInvite(request, env);

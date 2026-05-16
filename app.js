@@ -1040,6 +1040,31 @@ const Coach = {
     }
   },
 
+  // ---- "How this fits you" Claude blurb (cached per book per device) ----
+  _bookFitCache: {},
+  async bookFit(book) {
+    if (!book?.title || !book?.author) return { error: 'Missing book info' };
+    const key = book.id || (book.title + '|' + book.author);
+    if (this._bookFitCache[key]) return this._bookFitCache[key];
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) return { error: 'sign-in required' };
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return { error: 'no worker' };
+    try {
+      const dna = this.buildDna();
+      const resp = await fetch(Sync.workerUrl() + '/coach/book-fit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await Sync.authHeaders()) },
+        body: JSON.stringify({
+          title: book.title, author: book.author, genre: book.genre, pages: book.pages, dna,
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data?.error || ('HTTP ' + resp.status));
+      const out = { text: data.text };
+      this._bookFitCache[key] = out;
+      return out;
+    } catch (e) { return { error: e.message }; }
+  },
+
   async stallRecovery({ title, author, currentPage, totalPages, daysAway }) {
     if (typeof Auth === 'undefined' || !Auth.signedIn()) return { error: 'Sign in to use the coach' };
     if (typeof Sync === 'undefined' || !Sync.enabled()) return { error: 'Worker URL not set' };
@@ -1053,6 +1078,32 @@ const Coach = {
       if (!resp.ok) throw new Error(data?.error || ('HTTP ' + resp.status));
       return { text: data.text };
     } catch (e) { return { error: e.message }; }
+  },
+};
+
+// ---------- Friend (group) challenges (Phase V3) ----------
+const FriendChallenges = {
+  async _request(path, opts = {}) {
+    if (typeof Sync === 'undefined' || !Sync.enabled()) throw new Error('Worker URL not set');
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) throw new Error('Sign in to use group challenges');
+    const headers = { 'Content-Type': 'application/json', ...(await Sync.authHeaders()), ...(opts.headers || {}) };
+    const resp = await fetch(Sync.workerUrl() + path, { ...opts, headers });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data?.error || ('HTTP ' + resp.status));
+    return data;
+  },
+  async create({ name, type, target, deadline, invitees }) {
+    return this._request('/friend-challenges', { method: 'POST', body: JSON.stringify({ name, type, target, deadline, invitees }) });
+  },
+  async list() {
+    try { return await this._request('/friend-challenges', { method: 'GET' }); }
+    catch { return { items: [] }; }
+  },
+  async get(id) { return this._request(`/friend-challenges/${encodeURIComponent(id)}`, { method: 'GET' }); },
+  async join(id) { return this._request(`/friend-challenges/${encodeURIComponent(id)}/join`, { method: 'POST' }); },
+  async decline(id) { return this._request(`/friend-challenges/${encodeURIComponent(id)}/decline`, { method: 'POST' }); },
+  async invite(id, username) {
+    return this._request(`/friend-challenges/${encodeURIComponent(id)}/invite`, { method: 'POST', body: JSON.stringify({ username }) });
   },
 };
 
@@ -1788,6 +1839,7 @@ window.Chaptr = {
   getCurrentBookId, setCurrentBookId,
   getBookProgress, setBookProgress,
   getReviews, getReview, setReview, ReviewsBackend, Social, Stats, PairReads, Coach,
+  FriendChallenges,
   getCustomChallenges, createCustomChallenge, deleteCustomChallenge, computeChallengeProgress,
   renderSpoilers,
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,

@@ -115,6 +115,22 @@
   .persona-meta .refresh-btn { background: none; border: 1px solid var(--border); color: var(--ink-3); padding: 4px 10px; border-radius: var(--r-pill); cursor: pointer; font-size: .75rem; }
   .persona-meta .refresh-btn:hover { color: var(--primary); border-color: var(--primary); }
 
+  /* group challenges */
+  .fc-card { padding: 16px; margin-top: 12px; }
+  .fc-card .fc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .fc-card .fc-name { font-family: var(--serif); font-size: 1.1rem; }
+  .fc-card .fc-meta { color: var(--ink-3); font-size: .82rem; }
+  .fc-card .fc-board { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .fc-row { display: grid; grid-template-columns: 24px 32px 1fr auto; gap: 10px; align-items: center; padding: 6px 4px; }
+  .fc-row .rk { font-family: var(--serif); color: var(--ink-3); font-size: .85rem; text-align: center; }
+  .fc-row .av { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; color:#FFF; font-family: var(--serif); font-size: .8rem; font-weight: 600; }
+  .fc-row .who { font-weight: 500; }
+  .fc-row .who .invited { color: var(--ink-3); font-weight: 400; font-size: .78rem; margin-left: 4px; }
+  .fc-row .who.me { color: var(--primary); }
+  .fc-row .pg { font-family: var(--serif); font-variant-numeric: tabular-nums; }
+  .fc-card .fc-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .fc-empty { padding: 18px; border: 1px dashed var(--border); border-radius: var(--r-md); text-align: center; color: var(--ink-3); margin-top: 12px; }
+
   /* generic dialog reuse */
   .v3-dlg { position: fixed; inset: 0; background: rgba(20,20,30,.45); display: none; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
   .v3-dlg.open { display: flex; }
@@ -236,6 +252,16 @@
     <div id="ccGrid"></div>
     <div style="margin-top:12px;">
       <button class="btn btn-outline btn-sm" id="newChallengeBtn">+ New challenge</button>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="eyebrow">Group challenges · V3</div>
+    <h2>Race a friend, run a book club.</h2>
+    <p class="muted" style="margin-top:4px;">Invite people you follow, set a target, and watch the leaderboard. Progress comes from each member's finished books.</p>
+    <div id="fcList"></div>
+    <div style="margin-top:12px;">
+      <button class="btn btn-outline btn-sm" id="newFcBtn">+ New group challenge</button>
     </div>
   </section>
 
@@ -438,6 +464,43 @@
 
 </main>
 
+<div class="v3-dlg" id="newFcDlg">
+  <div class="v3-dlg-card" role="dialog" aria-modal="true">
+    <div class="eyebrow">New group challenge</div>
+    <h3 style="margin:4px 0 12px;">Get a few friends in.</h3>
+    <div class="v3-field">
+      <label>Name</label>
+      <input type="text" id="fcName" placeholder='e.g. "Q1 book club"'>
+    </div>
+    <div class="v3-field">
+      <label>Type</label>
+      <div class="yc-type-toggle" id="fcTypeToggle">
+        <button data-fc-type="books">Books finished</button>
+        <button data-fc-type="hours">Hours read</button>
+      </div>
+    </div>
+    <div class="v3-field">
+      <label>Target</label>
+      <input type="number" id="fcTarget" min="1" value="5">
+    </div>
+    <div class="v3-field">
+      <label>Deadline (optional)</label>
+      <input type="date" id="fcDeadline">
+    </div>
+    <div class="v3-field">
+      <label>Invite (search by username)</label>
+      <input type="text" id="fcInviteSearch" placeholder="@friend">
+      <div id="fcInviteResults" style="display:flex; flex-direction:column; gap:6px; margin-top:8px;"></div>
+      <div id="fcInvitedChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
+    </div>
+    <div id="fcError" style="display:none; padding:10px 12px; background:#FEF2F2; color:var(--danger); border-radius:var(--r-sm); font-size:.85rem;"></div>
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+      <button class="btn btn-ghost btn-sm" id="fcCancel">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="fcSave">Create + invite</button>
+    </div>
+  </div>
+</div>
+
 <div class="v3-dlg" id="newChallengeDlg">
   <div class="v3-dlg-card" role="dialog" aria-modal="true">
     <div class="eyebrow">New challenge</div>
@@ -489,14 +552,14 @@
   </div>
 </footer>
 
-<script src="app.js?v=27"></script>
+<script src="app.js?v=28"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
           getYearChallenge, setYearChallenge, getYearChallengeProgress,
           getAISettings, setAISetting, exportReaderProfile, wipeReaderProfile,
           getGoalType, setGoalType, getDailyGoalPages, setDailyGoalPages,
-          Sync, Auth, Social, Coach, getDeviceId,
+          Sync, Auth, Social, Coach, FriendChallenges, getDeviceId,
           getCustomChallenges, createCustomChallenge, deleteCustomChallenge, computeChallengeProgress,
           Store, K } = window.Chaptr;
 
@@ -968,6 +1031,169 @@
     }
   }
 
+  // --- group challenges (V3) ---
+  function fcInitials(p) {
+    const n = (p.displayName || p.username || 'R').trim();
+    return n.slice(0, 2).toUpperCase();
+  }
+  function fcAvatarBg(p) {
+    const hue = p.avatarHue ?? (typeof Chaptr !== 'undefined' ? Chaptr : window.Chaptr).hashHue(p.username || 'r');
+    return `linear-gradient(135deg, hsl(${hue},45%,40%), hsl(${(hue+40)%360},55%,55%))`;
+  }
+  function fmtFcVal(type, v) { return type === 'hours' ? `${v}h` : v; }
+
+  async function renderFriendChallenges() {
+    const wrap = document.getElementById('fcList');
+    if (!Auth.signedIn() || !Sync.enabled()) {
+      wrap.innerHTML = '<div class="fc-empty">Sign in (above) to start a group challenge.</div>';
+      return;
+    }
+    const data = await FriendChallenges.list();
+    const items = data.items || [];
+    if (!items.length) {
+      wrap.innerHTML = '<div class="fc-empty">No group challenges yet — create one below.</div>';
+      return;
+    }
+    wrap.innerHTML = items.map((it, i) => `
+      <div class="card fc-card" id="fc-card-${it.id}">
+        <div class="fc-head">
+          <div>
+            <div class="fc-name">${escapeHtmlPlain(it.name)}</div>
+            <div class="fc-meta">${it.type === 'hours' ? 'Hours' : 'Books'} · target ${it.target}${it.deadline ? ' · due ' + new Date(it.deadline).toLocaleDateString(undefined, { month:'short', day:'numeric' }) : ''}${it.youAreOwner ? ' · you started this' : ' · started by ' + (it.owner.displayName || '@' + it.owner.username)}</div>
+          </div>
+          ${it.myStatus === 'invited' ? `
+            <div class="fc-actions">
+              <button class="btn btn-primary btn-sm" data-fc-join="${it.id}">Join</button>
+              <button class="btn btn-ghost btn-sm" data-fc-decline="${it.id}">Decline</button>
+            </div>` : `
+            <button class="btn btn-ghost btn-sm" data-fc-expand="${it.id}">View leaderboard</button>`}
+        </div>
+        <div class="fc-board" data-fc-board="${it.id}" style="display:${it.myStatus === 'joined' ? 'flex' : 'none'};"></div>
+      </div>
+    `).join('');
+    // Wire actions
+    wrap.querySelectorAll('[data-fc-join]').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try { await FriendChallenges.join(btn.dataset.fcJoin); await renderFriendChallenges(); }
+      catch (e) { alert(e.message); btn.disabled = false; }
+    }));
+    wrap.querySelectorAll('[data-fc-decline]').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try { await FriendChallenges.decline(btn.dataset.fcDecline); await renderFriendChallenges(); }
+      catch (e) { alert(e.message); btn.disabled = false; }
+    }));
+    wrap.querySelectorAll('[data-fc-expand]').forEach(btn => btn.addEventListener('click', async () => {
+      const id = btn.dataset.fcExpand;
+      const board = wrap.querySelector(`[data-fc-board="${id}"]`);
+      if (!board) return;
+      board.style.display = board.style.display === 'none' ? 'flex' : 'none';
+      if (board.style.display !== 'none') await loadLeaderboard(id, board);
+    }));
+    // Auto-load leaderboards for joined items
+    for (const it of items) {
+      if (it.myStatus === 'joined') {
+        const board = wrap.querySelector(`[data-fc-board="${it.id}"]`);
+        if (board) loadLeaderboard(it.id, board);
+      }
+    }
+  }
+
+  async function loadLeaderboard(id, boardEl) {
+    boardEl.innerHTML = '<div class="muted" style="padding:6px; font-size:.85rem;">Loading…</div>';
+    try {
+      const data = await FriendChallenges.get(id);
+      const myUid = Sync.status().effectiveUserId;
+      // Sort: joined members first (by progress desc), then invited.
+      const joined = data.members.filter(m => m.status === 'joined');
+      const invited = data.members.filter(m => m.status === 'invited');
+      const rows = [...joined, ...invited];
+      boardEl.innerHTML = rows.map((m, i) => {
+        const pct = m.progress.target > 0 ? Math.min(100, Math.round((m.progress.current / m.progress.target) * 100)) : 0;
+        const isMe = m.profile.id === myUid;
+        const name = m.profile.displayName || m.profile.username || 'Reader';
+        const rank = m.status === 'joined' ? `${i + 1}` : '–';
+        return `<div class="fc-row">
+          <div class="rk">${rank}</div>
+          <div class="av" style="background:${fcAvatarBg(m.profile)};">${fcInitials(m.profile)}</div>
+          <div class="who ${isMe ? 'me' : ''}">${escapeHtmlPlain(name)}${m.status === 'invited' ? '<span class="invited">(invited)</span>' : ''}</div>
+          <div class="pg">${m.status === 'joined' ? `${fmtFcVal(data.challenge.type, m.progress.current)} <span class="muted" style="font-size:.78rem;">/ ${data.challenge.target} · ${pct}%</span>` : ''}</div>
+        </div>`;
+      }).join('');
+    } catch (e) {
+      boardEl.innerHTML = `<div class="muted" style="padding:6px; font-size:.85rem;">${e.message}</div>`;
+    }
+  }
+
+  function wireNewFc() {
+    const dlg = document.getElementById('newFcDlg');
+    let fcType = 'books';
+    let invitedSet = new Set();
+    function paint() {
+      document.querySelectorAll('#fcTypeToggle button').forEach(b => b.classList.toggle('active', b.dataset.fcType === fcType));
+    }
+    function paintChips() {
+      const wrap = document.getElementById('fcInvitedChips');
+      wrap.innerHTML = [...invitedSet].map(u => `<span style="padding:4px 10px; background:var(--primary-tint); color:var(--primary); border-radius:var(--r-pill); font-size:.78rem;">@${escapeHtmlPlain(u)} <button data-uninvite="${u}" style="background:none; border:0; color:inherit; cursor:pointer;">×</button></span>`).join('');
+      wrap.querySelectorAll('[data-uninvite]').forEach(btn => btn.addEventListener('click', () => {
+        invitedSet.delete(btn.dataset.uninvite); paintChips();
+      }));
+    }
+    document.querySelectorAll('#fcTypeToggle button').forEach(btn => btn.addEventListener('click', () => { fcType = btn.dataset.fcType; paint(); }));
+    function open() {
+      document.getElementById('fcName').value = '';
+      document.getElementById('fcTarget').value = '5';
+      document.getElementById('fcDeadline').value = '';
+      document.getElementById('fcInviteSearch').value = '';
+      document.getElementById('fcInviteResults').innerHTML = '';
+      invitedSet = new Set();
+      paintChips();
+      document.getElementById('fcError').style.display = 'none';
+      fcType = 'books'; paint();
+      dlg.classList.add('open');
+      setTimeout(() => document.getElementById('fcName').focus(), 50);
+    }
+    function close() { dlg.classList.remove('open'); }
+    document.getElementById('newFcBtn').addEventListener('click', open);
+    document.getElementById('fcCancel').addEventListener('click', close);
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) close(); });
+
+    let searchTimer = null;
+    document.getElementById('fcInviteSearch').addEventListener('input', (e) => {
+      clearTimeout(searchTimer);
+      const q = e.target.value;
+      searchTimer = setTimeout(async () => {
+        const out = document.getElementById('fcInviteResults');
+        if (q.trim().length < 2) { out.innerHTML = ''; return; }
+        const results = await Social.search(q);
+        if (!results.length) { out.innerHTML = '<div class="muted" style="font-size:.82rem;">No matches.</div>'; return; }
+        out.innerHTML = results.slice(0, 6).map(u => `<div style="display:flex; align-items:center; gap:10px; padding:6px; border:1px solid var(--border); border-radius:var(--r-sm);">
+          <div style="flex:1;"><strong>${escapeHtmlPlain(u.displayName || u.username)}</strong> <span class="muted">@${escapeHtmlPlain(u.username)}</span></div>
+          <button class="btn btn-outline btn-sm" data-fc-add="${u.username}">+ Invite</button>
+        </div>`).join('');
+        out.querySelectorAll('[data-fc-add]').forEach(btn => btn.addEventListener('click', () => {
+          invitedSet.add(btn.dataset.fcAdd); paintChips();
+        }));
+      }, 250);
+    });
+
+    document.getElementById('fcSave').addEventListener('click', async () => {
+      const err = document.getElementById('fcError');
+      err.style.display = 'none';
+      const name = document.getElementById('fcName').value.trim();
+      const target = parseInt(document.getElementById('fcTarget').value, 10);
+      const deadline = document.getElementById('fcDeadline').value || null;
+      if (!name) { err.style.display = ''; err.textContent = 'Give it a name.'; return; }
+      if (!target || target < 1) { err.style.display = ''; err.textContent = 'Target must be at least 1.'; return; }
+      try {
+        await FriendChallenges.create({ name, type: fcType, target, deadline, invitees: [...invitedSet] });
+        close();
+        renderFriendChallenges();
+      } catch (e) {
+        err.style.display = ''; err.textContent = e.message;
+      }
+    });
+  }
+
   // --- annual challenge ---
   const YC_CIRC = 2 * Math.PI * 56;
   function renderChallenge() {
@@ -1092,6 +1318,8 @@
   wireChallenge();
   renderChallenges();
   wireNewChallenge();
+  renderFriendChallenges();
+  wireNewFc();
   if (getAISettings().readerPersona) renderPersonaClaude();
   else { document.getElementById('personaText').textContent = 'Reader Persona is off.'; document.getElementById('personaSignals').textContent = ''; }
   renderCalendar();
