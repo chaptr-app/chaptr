@@ -811,6 +811,99 @@ async function handleReviewsPublic(request, env) {
   return json({ reviews: rows?.results || [] });
 }
 
+// ---------- Coach: Claude-generated insights (Phase V3) ----------
+async function callClaudeText(env, system, user) {
+  let resp;
+  try {
+    resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 600,
+        system,
+        messages: [{ role: 'user', content: user }],
+      }),
+    });
+  } catch (e) { throw new Error('Claude unreachable: ' + e.message); }
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => 'unknown');
+    throw new Error('Claude ' + resp.status + ': ' + detail.slice(0, 300));
+  }
+  const data = await resp.json();
+  return (data.content?.[0]?.text || '').trim();
+}
+
+const PERSONA_SYSTEM = `You are the Reader Persona writer for Chaptr, a reading-habit app.
+Generate ONE short paragraph (2-3 sentences) describing this reader's profile based
+on their data. Be specific and warm, never generic. Reference at least two stats
+explicitly (e.g. WPM, top genre, peak time, mood, session length, completion rate).
+End with a single recommendation about what to read next or when to read.
+Return only the paragraph — no headings, no JSON, no markdown.`;
+
+async function handleCoachPersona(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!env.ANTHROPIC_API_KEY) return json({ error: 'Anthropic key not configured' }, 503);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const dna = body?.dna || {};
+  const userMsg = `Reader DNA:
+- Average WPM: ${dna.wpm ?? 'unknown'}
+- Average session length: ${dna.avgSession ?? 'unknown'} minutes
+- Total sessions: ${dna.sessionCount ?? 'unknown'}
+- Top genre: ${dna.topGenre ?? 'unknown'}
+- Recent dominant mood: ${dna.mood ?? 'unknown'}
+- Books touched (last 30d): ${dna.recentBooks ?? 'unknown'}
+- Day streak: ${dna.streak ?? 'unknown'}
+- Books finished this year: ${dna.booksFinishedYear ?? 'unknown'}
+- Pace by genre (WPM): ${dna.paceByGenre ? JSON.stringify(dna.paceByGenre) : 'unknown'}
+
+Write the persona paragraph.`;
+  try {
+    const text = await callClaudeText(env, PERSONA_SYSTEM, userMsg);
+    return json({ text });
+  } catch (e) { return json({ error: e.message }, 502); }
+}
+
+const STALL_SYSTEM = `You are a reading coach for Chaptr. The user stalled on a book
+they were enjoying and wants help getting back in. Output exactly two short paragraphs:
+
+1. RECAP: 2-3 sentences setting the scene at their stall point — major characters,
+   the central tension, the recent emotional beat. Keep it spoiler-aware (only
+   spoil up to their last page). If you don't know the book well, give a more
+   abstract "where you likely left off" recap.
+
+2. RE-ENTRY: 2 sentences with a specific tactic to re-engage — a chapter to
+   re-read, a question to hold in mind, or a bite-sized goal for tonight.
+
+Plain prose only — no headings, no labels like "RECAP:" or "RE-ENTRY:", no markdown.
+Two paragraphs separated by a blank line.`;
+
+async function handleCoachStallRecovery(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!env.ANTHROPIC_API_KEY) return json({ error: 'Anthropic key not configured' }, 503);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { title, author, currentPage, totalPages, daysAway } = body || {};
+  if (!title || !author) return json({ error: 'Missing title or author' }, 400);
+  const userMsg = `Book: "${title}" by ${author}
+Total pages: ${totalPages || 'unknown'}
+Reader stalled at page: ${currentPage || 'unknown'}
+Days since last session: ${daysAway || 'unknown'}
+
+Write the recap + re-entry response.`;
+  try {
+    const text = await callClaudeText(env, STALL_SYSTEM, userMsg);
+    return json({ text });
+  } catch (e) { return json({ error: e.message }, 502); }
+}
+
 // ---------- Reading buddies (Phase 4) ----------
 const PAIR_ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
 
@@ -999,6 +1092,10 @@ export default {
     // Shelves (Phase 3E)
     if (path === '/shelves' && request.method === 'POST') return handleShelfUpsert(request, env);
     if (path === '/shelves' && request.method === 'DELETE') return handleShelfDelete(request, env);
+
+    // Coach (Phase V3)
+    if (path === '/coach/persona' && request.method === 'POST') return handleCoachPersona(request, env);
+    if (path === '/coach/stall-recovery' && request.method === 'POST') return handleCoachStallRecovery(request, env);
 
     // Reading buddies (Phase 4)
     if (path === '/pair-reads' && request.method === 'POST') return handlePairInvite(request, env);

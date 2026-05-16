@@ -96,6 +96,34 @@
     font: inherit; text-align: right; background: var(--bg); color: var(--ink);
   }
 
+  /* custom challenges */
+  .cc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-top: 14px; }
+  .cc-card { padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+  .cc-card .nm { font-family: var(--serif); font-size: 1.05rem; }
+  .cc-card .stats { display: flex; justify-content: space-between; align-items: baseline; }
+  .cc-card .num { font-family: var(--serif); font-size: 1.6rem; }
+  .cc-card .target { font-size: .82rem; color: var(--ink-3); }
+  .cc-card .bar { height: 6px; background: var(--surface-2); border-radius: var(--r-pill); overflow: hidden; margin-top: 4px; }
+  .cc-card .fill { height: 100%; background: var(--primary); transition: width .4s ease; }
+  .cc-card .meta { font-size: .78rem; color: var(--ink-3); display: flex; justify-content: space-between; }
+  .cc-card .del { background: none; border: 0; color: var(--ink-3); font-size: .78rem; cursor: pointer; padding: 2px 0; align-self: flex-start; }
+  .cc-card .del:hover { color: var(--danger); }
+  .cc-empty { padding: 24px; border: 1px dashed var(--border); border-radius: var(--r-md); text-align: center; color: var(--ink-3); margin-top: 14px; }
+
+  /* persona Claude blurb */
+  .persona-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: .75rem; color: var(--ink-3); }
+  .persona-meta .refresh-btn { background: none; border: 1px solid var(--border); color: var(--ink-3); padding: 4px 10px; border-radius: var(--r-pill); cursor: pointer; font-size: .75rem; }
+  .persona-meta .refresh-btn:hover { color: var(--primary); border-color: var(--primary); }
+
+  /* generic dialog reuse */
+  .v3-dlg { position: fixed; inset: 0; background: rgba(20,20,30,.45); display: none; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
+  .v3-dlg.open { display: flex; }
+  .v3-dlg-card { background: var(--surface); border-radius: var(--r-lg); padding: 24px; max-width: 460px; width: 100%; box-shadow: var(--shadow-lg); max-height: 80vh; overflow-y: auto; }
+  .v3-field { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+  .v3-field label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+  .v3-field input { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-sm); font: inherit; background: var(--bg); color: var(--ink); }
+  .v3-field input:focus { outline: 0; border-color: var(--primary); background: var(--surface); }
+
   /* AI settings toggle row */
   .ai-row {
     display: flex; justify-content: space-between; align-items: center; gap: 16px;
@@ -198,6 +226,16 @@
           </div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="eyebrow">Custom challenges · V3</div>
+    <h2>Set your own targets.</h2>
+    <p class="muted" style="margin-top:4px;">Track anything beyond the annual goal — a book club, a translated-fiction binge, a vacation reading streak.</p>
+    <div id="ccGrid"></div>
+    <div style="margin-top:12px;">
+      <button class="btn btn-outline btn-sm" id="newChallengeBtn">+ New challenge</button>
     </div>
   </section>
 
@@ -400,6 +438,37 @@
 
 </main>
 
+<div class="v3-dlg" id="newChallengeDlg">
+  <div class="v3-dlg-card" role="dialog" aria-modal="true">
+    <div class="eyebrow">New challenge</div>
+    <h3 style="margin:4px 0 12px;">What are you going for?</h3>
+    <div class="v3-field">
+      <label>Name</label>
+      <input type="text" id="ccName" placeholder='e.g. "5 books in translation"'>
+    </div>
+    <div class="v3-field">
+      <label>Type</label>
+      <div class="yc-type-toggle" id="ccTypeToggle">
+        <button data-cc-type="books">Books finished</button>
+        <button data-cc-type="hours">Hours read</button>
+      </div>
+    </div>
+    <div class="v3-field">
+      <label>Target</label>
+      <input type="number" id="ccTarget" min="1" value="5">
+    </div>
+    <div class="v3-field">
+      <label>Deadline (optional)</label>
+      <input type="date" id="ccDeadline">
+    </div>
+    <div id="ccError" style="display:none; padding:10px 12px; background:#FEF2F2; color:var(--danger); border-radius:var(--r-sm); font-size:.85rem;"></div>
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+      <button class="btn btn-ghost btn-sm" id="ccCancel">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="ccSave">Create</button>
+    </div>
+  </div>
+</div>
+
 <div id="friendsDlg" style="display:none; position:fixed; inset:0; background:rgba(20,20,30,.45); z-index:200; align-items:center; justify-content:center; padding:16px;">
   <div style="background:var(--surface); border-radius:var(--r-lg); padding:24px; max-width:480px; width:100%; box-shadow:var(--shadow-lg); max-height:80vh; overflow-y:auto;">
     <div class="eyebrow">Find friends</div>
@@ -420,14 +489,15 @@
   </div>
 </footer>
 
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
           getYearChallenge, setYearChallenge, getYearChallengeProgress,
           getAISettings, setAISetting, exportReaderProfile, wipeReaderProfile,
           getGoalType, setGoalType, getDailyGoalPages, setDailyGoalPages,
-          Sync, Auth, Social, getDeviceId,
+          Sync, Auth, Social, Coach, getDeviceId,
+          getCustomChallenges, createCustomChallenge, deleteCustomChallenge, computeChallengeProgress,
           Store, K } = window.Chaptr;
 
   const LEVEL_COLORS = ['#F4EFE6', 'hsl(150,30%,80%)', 'hsl(150,32%,60%)', 'hsl(150,38%,45%)', '#2D4A3E'];
@@ -781,6 +851,123 @@
     });
   }
 
+  // --- custom challenges (V3) ---
+  function fmtChallengeProgress(ch, p) {
+    if (ch.type === 'hours') return `${p.current}h of ${ch.target}h`;
+    return `${p.current} of ${ch.target} books`;
+  }
+  function renderChallenges() {
+    const grid = document.getElementById('ccGrid');
+    const list = getCustomChallenges();
+    if (!list.length) {
+      grid.innerHTML = `<div class="cc-empty">No custom challenges yet. Tap below to create one.</div>`;
+      return;
+    }
+    grid.innerHTML = `<div class="cc-grid">` + list.map(ch => {
+      const p = computeChallengeProgress(ch);
+      const pct = Math.round(p.pct * 100);
+      const dl = ch.deadline ? `Due ${new Date(ch.deadline).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' })}` : 'No deadline';
+      return `<div class="card cc-card">
+        <div class="nm">${escapeHtmlPlain(ch.name)}</div>
+        <div class="stats">
+          <span class="num">${pct}%</span>
+          <span class="target">${fmtChallengeProgress(ch, p)}</span>
+        </div>
+        <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
+        <div class="meta"><span>${dl}</span><span>${ch.type === 'hours' ? '⏱' : '📚'}</span></div>
+        <button class="del" data-del-cc="${ch.id}">Delete</button>
+      </div>`;
+    }).join('') + `</div>`;
+    grid.querySelectorAll('[data-del-cc]').forEach(btn => btn.addEventListener('click', () => {
+      if (!confirm('Delete this challenge?')) return;
+      deleteCustomChallenge(btn.dataset.delCc);
+      renderChallenges();
+    }));
+  }
+  function escapeHtmlPlain(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function wireNewChallenge() {
+    const dlg = document.getElementById('newChallengeDlg');
+    let ccType = 'books';
+    function paint() {
+      document.querySelectorAll('#ccTypeToggle button').forEach(b => b.classList.toggle('active', b.dataset.ccType === ccType));
+    }
+    document.querySelectorAll('#ccTypeToggle button').forEach(btn => btn.addEventListener('click', () => { ccType = btn.dataset.ccType; paint(); }));
+    function open() {
+      document.getElementById('ccName').value = '';
+      document.getElementById('ccTarget').value = ccType === 'hours' ? '20' : '5';
+      document.getElementById('ccDeadline').value = '';
+      document.getElementById('ccError').style.display = 'none';
+      ccType = 'books'; paint();
+      dlg.classList.add('open');
+      setTimeout(() => document.getElementById('ccName').focus(), 50);
+    }
+    function close() { dlg.classList.remove('open'); }
+    document.getElementById('newChallengeBtn').addEventListener('click', open);
+    document.getElementById('ccCancel').addEventListener('click', close);
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) close(); });
+    document.getElementById('ccSave').addEventListener('click', () => {
+      const err = document.getElementById('ccError');
+      err.style.display = 'none';
+      const name = document.getElementById('ccName').value.trim();
+      const target = parseInt(document.getElementById('ccTarget').value, 10);
+      const deadline = document.getElementById('ccDeadline').value || null;
+      if (!name) { err.style.display = ''; err.textContent = 'Give it a name.'; return; }
+      if (!target || target < 1) { err.style.display = ''; err.textContent = 'Target must be at least 1.'; return; }
+      const created = createCustomChallenge({ name, type: ccType, target, deadline });
+      if (!created) { err.style.display = ''; err.textContent = 'Could not create.'; return; }
+      close();
+      renderChallenges();
+    });
+  }
+
+  // --- Reader Persona (Claude-generated, V3) ---
+  async function renderPersonaClaude() {
+    const textEl = document.getElementById('personaText');
+    const sigEl = document.getElementById('personaSignals');
+    const wrap = textEl?.parentElement;
+    if (!wrap) return;
+    // Inject a meta footer with the refresh button if not already present.
+    let meta = wrap.querySelector('.persona-meta');
+    if (!meta) {
+      meta = document.createElement('div');
+      meta.className = 'persona-meta';
+      meta.innerHTML = `<span id="personaTs"></span><button class="refresh-btn" id="personaRefreshBtn">Regenerate</button>`;
+      wrap.appendChild(meta);
+      document.getElementById('personaRefreshBtn').addEventListener('click', () => loadPersona({ force: true }));
+    }
+    await loadPersona({ force: false });
+  }
+
+  async function loadPersona({ force }) {
+    const textEl = document.getElementById('personaText');
+    const sigEl = document.getElementById('personaSignals');
+    const tsEl = document.getElementById('personaTs');
+
+    if (!Auth.signedIn() || !Sync.enabled()) {
+      // Not signed in / no worker — fall back to the existing local renderPersona stub
+      try { renderPersona(); } catch {}
+      if (sigEl) sigEl.textContent = 'Local stub · sign in to get a Claude-generated persona';
+      if (tsEl) tsEl.textContent = '';
+      return;
+    }
+    if (sigEl) sigEl.textContent = 'Generated by Claude · refreshes weekly';
+    if (force && textEl) textEl.textContent = 'Claude is reading your DNA…';
+    const result = await Coach.fetchPersona({ force });
+    if (!result) { if (textEl) textEl.textContent = 'No persona available yet.'; return; }
+    if (result.error) {
+      if (textEl) textEl.textContent = result.error;
+      return;
+    }
+    if (textEl) textEl.textContent = result.text;
+    if (tsEl && result.generatedAt) {
+      const d = new Date(result.generatedAt);
+      tsEl.textContent = 'Generated ' + d.toLocaleString();
+    }
+  }
+
   // --- annual challenge ---
   const YC_CIRC = 2 * Math.PI * 56;
   function renderChallenge() {
@@ -903,7 +1090,9 @@
   wireSync();
   renderChallenge();
   wireChallenge();
-  if (getAISettings().readerPersona) renderPersona();
+  renderChallenges();
+  wireNewChallenge();
+  if (getAISettings().readerPersona) renderPersonaClaude();
   else { document.getElementById('personaText').textContent = 'Reader Persona is off.'; document.getElementById('personaSignals').textContent = ''; }
   renderCalendar();
   renderGenreBars();

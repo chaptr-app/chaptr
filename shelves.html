@@ -223,6 +223,23 @@
   </div>
 </div>
 
+<div class="dlg-back" id="stallDlg">
+  <div class="dlg-card" role="dialog" aria-modal="true">
+    <div class="eyebrow">✨ Re-entry tips</div>
+    <h3 id="stallBookTitle" style="margin:4px 0 4px;">Book</h3>
+    <div class="muted" id="stallBookAuthor" style="font-size:.9rem;"></div>
+    <div id="stallBody" style="margin-top:14px; font-family:var(--serif); font-size:1rem; line-height:1.5; color:var(--ink); white-space:pre-line; min-height:120px;">
+      Claude is reading your shelf…
+    </div>
+    <div class="dlg-actions">
+      <div></div>
+      <div class="right">
+        <button class="btn btn-primary" id="stallClose">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="dlg-back" id="reviewDlg">
   <div class="dlg-card" role="dialog" aria-modal="true">
     <div class="eyebrow">Your review</div>
@@ -264,7 +281,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
@@ -273,6 +290,7 @@
           addToCustomShelf, removeFromCustomShelf,
           customShelvesContaining,
           getSmartShelves, getSmartShelfById, isSmartShelfId,
+          getBookProgress, Coach,
           renderSpoilers } = window.Chaptr;
 
   function starString(rating) {
@@ -406,6 +424,10 @@
       const tagged = customShelvesContaining(id);
       const tagBtn = `<button class="tag-btn ${tagged.length ? 'has-tags' : ''}" data-tag="${id}">${tagged.length ? `Tags · ${tagged.length}` : '+ Tag'}</button>`;
       const reviewBtn = `<button class="review-btn" data-review="${id}">${getReview(id) ? 'Edit review' : '+ Review'}</button>`;
+      // Phase V3 — Stall recovery: only on the Stalled smart shelf
+      const stallBtn = (meta.smart && activeShelf === 'smart_stalled')
+        ? `<button class="review-btn" data-stall="${id}" style="border-color:var(--accent); color:var(--accent);">✨ Get re-entry tips</button>`
+        : '';
 
       const rv = getReview(id);
       const reviewStrip = rv ? `<div class="review-strip">
@@ -420,7 +442,7 @@
           <div class="title">${escapeHtml(b.title)}</div>
           <div class="meta">${escapeHtml(b.author)} · ${b.genre} · ${b.pages}p</div>
         </div>
-        <div class="row-actions">${actionButtons}${tagBtn}${reviewBtn}</div>
+        <div class="row-actions">${actionButtons}${tagBtn}${reviewBtn}${stallBtn}</div>
         ${reviewStrip}
       </div>`;
     }).join('');
@@ -451,6 +473,47 @@
     el.querySelectorAll('[data-review]').forEach(btn => {
       btn.addEventListener('click', () => openReviewDlg(btn.dataset.review));
     });
+    // wire stall-recovery buttons (V3)
+    el.querySelectorAll('[data-stall]').forEach(btn => {
+      btn.addEventListener('click', () => openStallDlg(btn.dataset.stall));
+    });
+  }
+
+  // ---------- stall recovery (V3) ----------
+  const stallDlg = document.getElementById('stallDlg');
+  document.getElementById('stallClose').addEventListener('click', () => stallDlg.classList.remove('open'));
+  stallDlg.addEventListener('click', (e) => { if (e.target === stallDlg) stallDlg.classList.remove('open'); });
+
+  async function openStallDlg(bookId) {
+    const b = findBook(bookId);
+    document.getElementById('stallBookTitle').textContent = b.title;
+    document.getElementById('stallBookAuthor').textContent = b.author;
+    const body = document.getElementById('stallBody');
+    body.textContent = 'Claude is reading your shelf…';
+    stallDlg.classList.add('open');
+    // Compute days away from history
+    const hist = (typeof Chaptr !== 'undefined' ? Chaptr : window.Chaptr).Store.get('chaptr.history', []);
+    const sessionsForBook = hist.filter(e => e.bookId === bookId);
+    let daysAway = 'unknown';
+    if (sessionsForBook.length) {
+      const lastDate = sessionsForBook.map(e => e.date).sort().pop();
+      daysAway = Math.floor((Date.now() - new Date(lastDate + 'T00:00:00').getTime()) / 86400000);
+    }
+    const result = await Coach.stallRecovery({
+      title: b.title, author: b.author,
+      currentPage: getBookProgress(bookId),
+      totalPages: b.pages,
+      daysAway,
+    });
+    if (result.error) {
+      body.style.fontFamily = 'var(--sans)';
+      body.style.color = 'var(--ink-3)';
+      body.textContent = 'Could not get tips: ' + result.error + '\n\nMake sure you\'re signed in and the Worker URL is set in Profile.';
+    } else {
+      body.style.fontFamily = 'var(--serif)';
+      body.style.color = 'var(--ink)';
+      body.textContent = result.text;
+    }
   }
 
   function renderAll() { renderTabs(); renderHeader(); renderShelf(); }

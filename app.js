@@ -970,6 +970,133 @@ function setReview(bookId, review) {
   try { ReviewsBackend.upsert(bookId, isEmpty ? null : m[bookId]); } catch {}
 }
 
+// ---------- Coach: Claude-generated insights (Phase V3) ----------
+const Coach = {
+  // ---- Reader Persona (cached weekly) ----
+  PERSONA_KEY: 'chaptr.personaCache',
+  PERSONA_TTL_MS: 7 * 24 * 60 * 60 * 1000,
+
+  buildDna() {
+    const hist = Store.get('chaptr.history', []);
+    const wpm = Store.get('chaptr.wpm', 250);
+    const total = hist.reduce((a, e) => a + (e.minutes || 0), 0);
+    const avgSession = hist.length ? Math.round(total / hist.length) : 0;
+    const sessionCount = hist.length;
+    const genres = {};
+    for (const e of hist) {
+      const b = findBook(e.bookId);
+      genres[b.genre] = (genres[b.genre] || 0) + (e.minutes || 0);
+    }
+    const topGenre = Object.entries(genres).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'unknown';
+    const moods = hist.map(e => e.mood).filter(Boolean);
+    const mood = moods.length ? moods.sort((a,b) =>
+      moods.filter(m => m===a).length - moods.filter(m => m===b).length).pop() : 'unknown';
+    const cutoff = Date.now() - 30 * 86400000;
+    const recentBooks = new Set(hist.filter(e => new Date(e.date).getTime() >= cutoff).map(e => e.bookId)).size;
+    const streak = (typeof getStreak === 'function') ? getStreak(10) : 0;
+    const dates = Store.get('chaptr.shelfDates', {});
+    const y = new Date().getFullYear();
+    const booksFinishedYear = Object.values(dates).filter(d => d.read?.startsWith(y + '-')).length;
+    // Pace by genre (avg WPM)
+    const pace = {};
+    for (const e of hist) {
+      if (!e.wpm) continue;
+      const g = findBook(e.bookId).genre;
+      pace[g] = pace[g] || { sum: 0, n: 0 };
+      pace[g].sum += e.wpm; pace[g].n += 1;
+    }
+    const paceByGenre = {};
+    for (const [g, v] of Object.entries(pace)) paceByGenre[g] = Math.round(v.sum / v.n);
+    return { wpm, avgSession, sessionCount, topGenre, mood, recentBooks, streak, booksFinishedYear, paceByGenre };
+  },
+
+  cachedPersona() {
+    const c = Store.get(this.PERSONA_KEY, null);
+    if (!c) return null;
+    if (Date.now() - new Date(c.generatedAt).getTime() > this.PERSONA_TTL_MS) return null;
+    return c;
+  },
+
+  async fetchPersona({ force = false } = {}) {
+    if (!force) {
+      const cached = this.cachedPersona();
+      if (cached) return cached;
+    }
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) return null;
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return null;
+    try {
+      const resp = await fetch(Sync.workerUrl() + '/coach/persona', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await Sync.authHeaders()) },
+        body: JSON.stringify({ dna: this.buildDna() }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data?.error || ('HTTP ' + resp.status));
+      const out = { text: data.text, generatedAt: new Date().toISOString() };
+      Store.set(this.PERSONA_KEY, out);
+      return out;
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  async stallRecovery({ title, author, currentPage, totalPages, daysAway }) {
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) return { error: 'Sign in to use the coach' };
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return { error: 'Worker URL not set' };
+    try {
+      const resp = await fetch(Sync.workerUrl() + '/coach/stall-recovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await Sync.authHeaders()) },
+        body: JSON.stringify({ title, author, currentPage, totalPages, daysAway }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data?.error || ('HTTP ' + resp.status));
+      return { text: data.text };
+    } catch (e) { return { error: e.message }; }
+  },
+};
+
+// ---------- Custom challenges (Phase V3) ----------
+function getCustomChallenges() {
+  return Store.get('chaptr.customChallenges', []);
+}
+function setCustomChallenges(list) {
+  Store.set('chaptr.customChallenges', list);
+}
+function createCustomChallenge({ name, type, target, deadline }) {
+  const list = getCustomChallenges();
+  const ch = {
+    id: 'cc_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+    name: String(name || '').trim().slice(0, 80),
+    type: (type === 'hours') ? 'hours' : 'books',
+    target: Math.max(1, Math.min(10000, parseInt(target, 10) || 1)),
+    deadline: deadline || null, // ISO YYYY-MM-DD or null
+    createdAt: new Date().toISOString(),
+  };
+  if (!ch.name) return null;
+  list.push(ch);
+  setCustomChallenges(list);
+  return ch;
+}
+function deleteCustomChallenge(id) {
+  setCustomChallenges(getCustomChallenges().filter(c => c.id !== id));
+}
+function computeChallengeProgress(ch) {
+  const start = new Date(ch.createdAt);
+  const hist = Store.get('chaptr.history', []);
+  if (ch.type === 'hours') {
+    const ms = hist
+      .filter(e => new Date(e.date) >= start)
+      .reduce((a, e) => a + (e.ms || (e.minutes || 0) * 60000), 0);
+    const hours = ms / 3600000;
+    return { current: Math.round(hours * 10) / 10, target: ch.target, pct: Math.min(1, hours / ch.target) };
+  }
+  // books: count books moved to Read shelf since the challenge was created
+  const dates = Store.get('chaptr.shelfDates', {});
+  const finished = Object.values(dates).filter(d => d.read && new Date(d.read) >= start).length;
+  return { current: finished, target: ch.target, pct: Math.min(1, finished / ch.target) };
+}
+
 // ---------- Reading buddies (Phase 4) ----------
 const PairReads = {
   async _request(path, opts = {}) {
@@ -1660,7 +1787,9 @@ window.Chaptr = {
   ShelvesBackend,
   getCurrentBookId, setCurrentBookId,
   getBookProgress, setBookProgress,
-  getReviews, getReview, setReview, ReviewsBackend, Social, Stats, PairReads, renderSpoilers,
+  getReviews, getReview, setReview, ReviewsBackend, Social, Stats, PairReads, Coach,
+  getCustomChallenges, createCustomChallenge, deleteCustomChallenge, computeChallengeProgress,
+  renderSpoilers,
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
   attachSwipe, mountBottomNav, mountNowReadingPill,
