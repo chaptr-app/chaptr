@@ -532,9 +532,11 @@ function askClaude(query) {
 function getSession()   { return Store.get(K.session, null); }
 function clearSession() { Store.remove(K.session); }
 
-function startSession(bookId) {
+function startSession(bookId, opts = {}) {
   const now = Date.now();
-  Store.set(K.session, { bookId, startedAt: now, elapsedMs: 0, paused: false, lastResumeAt: now });
+  const format = opts.format === 'audio' ? 'audio' : 'print';
+  const speed = format === 'audio' ? Math.max(0.5, Math.min(3, parseFloat(opts.speed) || 1)) : 1;
+  Store.set(K.session, { bookId, startedAt: now, elapsedMs: 0, paused: false, lastResumeAt: now, format, speed });
 }
 function pauseSession() {
   const s = getSession(); if (!s || s.paused) return;
@@ -559,6 +561,10 @@ function stopSession({ endPage, startPage, mood }) {
   const pages = Math.max(0, (endPage || 0) - (startPage || 0));
   // crude WPM estimate: ~275 words/page
   const wpm = minutes > 0 && pages > 0 ? Math.round((pages * 275) / minutes) : null;
+  const format = s.format || 'print';
+  const speed = s.speed || 1;
+  // Audio "effective minutes" account for playback speed (1.5x audio = 1.5x content)
+  const effectiveMinutes = format === 'audio' ? Math.round(minutes * speed) : minutes;
   const entry = {
     bookId: s.bookId,
     date: new Date().toISOString().slice(0, 10),
@@ -568,6 +574,9 @@ function stopSession({ endPage, startPage, mood }) {
     pages,
     wpm,
     mood: mood || null,
+    format,
+    speed,
+    effectiveMinutes,
   };
   const hist = Store.get(K.history, []);
   hist.push(entry);
@@ -1062,6 +1071,22 @@ const Coach = {
       const out = { text: data.text };
       this._bookFitCache[key] = out;
       return out;
+    } catch (e) { return { error: e.message }; }
+  },
+
+  // ---- "What just happened?" chapter recap (Phase V4) ----
+  async chapterRecap({ title, author, currentPage, totalPages }) {
+    if (typeof Auth === 'undefined' || !Auth.signedIn()) return { error: 'Sign in to use the coach' };
+    if (typeof Sync === 'undefined' || !Sync.enabled()) return { error: 'Worker URL not set' };
+    try {
+      const resp = await fetch(Sync.workerUrl() + '/coach/chapter-recap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await Sync.authHeaders()) },
+        body: JSON.stringify({ title, author, currentPage, totalPages }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data?.error || ('HTTP ' + resp.status));
+      return { text: data.text };
     } catch (e) { return { error: e.message }; }
   },
 

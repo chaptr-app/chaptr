@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF7F2">
+<title>Author · Chaptr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=4">
+<style>
+  .a-head { display: grid; grid-template-columns: 140px 1fr; gap: 24px; align-items: start; margin-top: 32px; }
+  @media (max-width: 720px) { .a-head { grid-template-columns: 96px 1fr; gap: 16px; } }
+  .a-photo {
+    width: 140px; height: 140px; border-radius: 999px;
+    background-size: cover !important; background-position: center !important;
+    box-shadow: var(--shadow-lg); flex-shrink: 0;
+    display: grid; place-items: center;
+    color: #FFF; font-family: var(--serif); font-size: 3rem; font-weight: 600;
+  }
+  @media (max-width: 720px) { .a-photo { width: 96px; height: 96px; font-size: 2rem; } }
+  .a-name h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 2.6rem); }
+  .a-name .meta { color: var(--ink-3); font-size: .92rem; }
+  .a-bio { margin-top: 16px; color: var(--ink-2); font-size: .95rem; line-height: 1.5; max-width: 720px; }
+  .a-bio.collapsed { max-height: 6em; overflow: hidden; mask-image: linear-gradient(180deg, #000 60%, transparent); -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent); }
+  .a-bio + .more-btn { background: none; border: 0; color: var(--primary); cursor: pointer; padding: 4px 0; font-size: .85rem; margin-top: 4px; }
+
+  .a-section { margin-top: 32px; }
+  .a-section h2 { margin: 0 0 12px; }
+
+  .works-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; margin-top: 14px;
+  }
+  .work-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+    padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer;
+    text-decoration: none; color: inherit;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .work-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); color: inherit; }
+  .work-card .cv {
+    aspect-ratio: 2/3; border-radius: 4px; box-shadow: var(--shadow-sm);
+    background-size: cover !important; background-position: center !important;
+  }
+  .work-card .t { font-family: var(--serif); font-size: .92rem; line-height: 1.2; }
+  .work-card .y { font-size: .76rem; color: var(--ink-3); }
+
+  .empty-state { padding: 30px 16px; text-align: center; color: var(--ink-3); border: 1px dashed var(--border); border-radius: var(--r-md); }
+  .err-banner { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; padding: 14px 18px; border-radius: var(--r-md); margin: 24px 0; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="index.html"><span class="brand-mark">C</span> Chaptr</a>
+    <div class="nav-links">
+      <a href="today.html">Today</a>
+      <a href="library.html">Library</a>
+      <a href="shelves.html">Shelves</a>
+      <a href="profile.html">Profile</a>
+    </div>
+    <div class="nav-cta">
+      <a href="library.html" class="btn btn-ghost btn-sm hide-sm">← Back</a>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+  <div id="authorMain" style="display:none;">
+    <section class="a-head">
+      <div class="a-photo" id="aPhoto">–</div>
+      <div class="a-name">
+        <h1 id="aName">Author</h1>
+        <div class="meta" id="aMeta"></div>
+        <div id="aBioWrap" style="display:none;">
+          <div class="a-bio collapsed" id="aBio"></div>
+          <button class="more-btn" id="aMoreBtn">Read more</button>
+        </div>
+      </div>
+    </section>
+    <section class="a-section">
+      <div class="eyebrow">Works · OpenLibrary</div>
+      <h2>By this author.</h2>
+      <div id="aWorks"></div>
+    </section>
+  </div>
+  <div id="authorError" class="err-banner" style="display:none;"></div>
+</main>
+
+<footer class="footer">
+  <div class="container row">
+    <span>© Chaptr — a prototype.</span>
+    <span class="muted">Time is the new star rating.</span>
+  </div>
+</footer>
+
+<script src="app.js?v=30"></script>
+<script>
+  const { hashHue } = window.Chaptr;
+  const params = new URLSearchParams(location.search);
+  const name = (params.get('name') || '').trim();
+
+  function showError(msg) {
+    document.getElementById('authorError').style.display = '';
+    document.getElementById('authorError').textContent = msg;
+  }
+  function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function initialsOf(n) {
+    const parts = (n || 'R').trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return n.slice(0, 2).toUpperCase();
+  }
+
+  async function bootstrap() {
+    if (!name) { showError('No author name in URL. Try ?name=Kazuo Ishiguro'); return; }
+    document.title = name + ' · Chaptr';
+    document.getElementById('authorMain').style.display = '';
+    document.getElementById('aName').textContent = name;
+    const photo = document.getElementById('aPhoto');
+    const hue = hashHue(name);
+    photo.style.background = `linear-gradient(135deg, hsl(${hue},45%,40%), hsl(${(hue+40)%360},55%,55%))`;
+    photo.textContent = initialsOf(name);
+
+    // 1. Search OpenLibrary for the author
+    try {
+      const resp = await fetch('https://openlibrary.org/search/authors.json?q=' + encodeURIComponent(name) + '&limit=5');
+      const data = await resp.json();
+      const matches = data.docs || [];
+      const top = matches[0];
+      if (!top) {
+        document.getElementById('aMeta').textContent = 'No OpenLibrary match found.';
+        renderEmptyWorks();
+        return;
+      }
+      const olid = top.key; // e.g. OL12345A
+      document.getElementById('aMeta').textContent =
+        (top.birth_date ? `b. ${top.birth_date}` : '') +
+        (top.death_date ? ` · d. ${top.death_date}` : '') +
+        (top.work_count ? ` · ${top.work_count} works on OpenLibrary` : '');
+
+      // 2. Fetch author detail (for bio + photo)
+      try {
+        const aResp = await fetch(`https://openlibrary.org/authors/${olid}.json`);
+        const aData = await aResp.json();
+        const bio = typeof aData.bio === 'string' ? aData.bio : aData.bio?.value;
+        if (bio) {
+          document.getElementById('aBioWrap').style.display = '';
+          document.getElementById('aBio').textContent = bio;
+        }
+        if (aData.photos && aData.photos[0] && aData.photos[0] > 0) {
+          photo.style.background = `center/cover no-repeat url("https://covers.openlibrary.org/a/id/${aData.photos[0]}-L.jpg")`;
+          photo.textContent = '';
+        }
+      } catch {}
+
+      // 3. Fetch their works
+      const wResp = await fetch(`https://openlibrary.org/authors/${olid}/works.json?limit=24`);
+      const wData = await wResp.json();
+      const works = (wData.entries || []).filter(w => w.title);
+      renderWorks(works);
+    } catch (e) {
+      showError('Could not reach OpenLibrary: ' + e.message);
+    }
+  }
+
+  function renderEmptyWorks() {
+    document.getElementById('aWorks').innerHTML = '<div class="empty-state">No works to show.</div>';
+  }
+  function renderWorks(works) {
+    const wrap = document.getElementById('aWorks');
+    if (!works.length) { renderEmptyWorks(); return; }
+    wrap.innerHTML = `<div class="works-grid">${works.map((w, i) => {
+      const coverId = w.covers && w.covers[0];
+      const coverUrl = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null;
+      const yr = w.first_publish_date || '';
+      const href = `book.html?title=${encodeURIComponent(w.title)}&author=${encodeURIComponent(name)}`;
+      const bg = coverUrl
+        ? `center/cover no-repeat url("${coverUrl}")`
+        : `linear-gradient(135deg, hsl(${hashHue(w.title)},45%,35%), hsl(${(hashHue(w.title)+40)%360},55%,55%))`;
+      return `<a class="work-card" href="${href}">
+        <div class="cv" style="background:${bg};"></div>
+        <div class="t">${escapeHtml(w.title)}</div>
+        <div class="y">${escapeHtml(yr)}</div>
+      </a>`;
+    }).join('')}</div>`;
+  }
+
+  document.getElementById('aMoreBtn').addEventListener('click', () => {
+    const bio = document.getElementById('aBio');
+    const btn = document.getElementById('aMoreBtn');
+    if (bio.classList.contains('collapsed')) { bio.classList.remove('collapsed'); btn.textContent = 'Show less'; }
+    else { bio.classList.add('collapsed'); btn.textContent = 'Read more'; }
+  });
+
+  bootstrap();
+</script>
+</body>
+</html>

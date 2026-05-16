@@ -1057,6 +1057,37 @@ Write the recap + re-entry response.`;
   } catch (e) { return json({ error: e.message }, 502); }
 }
 
+// ---------- "What just happened?" chapter recap (Phase V4) ----------
+const CHAPTER_RECAP_SYSTEM = `You are Chaptr's mid-book reading coach. The reader is
+returning to a book and wants a quick refresher on what likely happened in the
+chapters they recently read. Output exactly 2 sentences:
+
+1. Frame the situation as of their current page (no spoilers past it).
+2. Suggest the emotional or plot beat to hold in mind as they read on.
+
+Plain prose, no headings, no bullet points. Spoiler-aware: never reference
+events past the page they're at. If the book is one you don't know well, give
+a more abstract "where you likely are" framing.`;
+
+async function handleCoachChapterRecap(request, env) {
+  const { userId, error } = await resolveUserId(request, env);
+  if (!userId) return json({ error: error || 'Unauthorized' }, 401);
+  if (!env.ANTHROPIC_API_KEY) return json({ error: 'Anthropic key not configured' }, 503);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const { title, author, currentPage, totalPages } = body || {};
+  if (!title || !author) return json({ error: 'Missing book metadata' }, 400);
+  const userMsg = `Book: "${title}" by ${author}
+Total pages: ${totalPages || 'unknown'}
+Reader is at page: ${currentPage || 'unknown'}
+
+Write the recap.`;
+  try {
+    const text = await callClaudeText(env, CHAPTER_RECAP_SYSTEM, userMsg);
+    return json({ text });
+  } catch (e) { return json({ error: e.message }, 502); }
+}
+
 // ---------- "How this fits you" book blurbs (Phase V3) ----------
 const BOOK_FIT_SYSTEM = `You are Chaptr's book-recommendation explainer.
 The user is looking at one specific book card. Write ONE plain sentence (15-30 words)
@@ -1477,6 +1508,7 @@ export default {
     if (path === '/coach/persona' && request.method === 'POST') return handleCoachPersona(request, env);
     if (path === '/coach/stall-recovery' && request.method === 'POST') return handleCoachStallRecovery(request, env);
     if (path === '/coach/book-fit' && request.method === 'POST') return handleCoachBookFit(request, env);
+    if (path === '/coach/chapter-recap' && request.method === 'POST') return handleCoachChapterRecap(request, env);
 
     // Friend challenges (Phase V3)
     if (path === '/friend-challenges' && request.method === 'POST') return handleFriendChallengeCreate(request, env);

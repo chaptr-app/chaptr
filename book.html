@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF7F2">
+<title>Book · Chaptr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=4">
+<style>
+  .b-hero { display: grid; grid-template-columns: 200px 1fr; gap: 28px; margin-top: 32px; align-items: start; }
+  @media (max-width: 720px) { .b-hero { grid-template-columns: 130px 1fr; gap: 18px; } }
+  .b-cover-lg { aspect-ratio: 2/3; border-radius: 8px; box-shadow: var(--shadow-lg); background-size: cover !important; background-position: center !important; }
+  .b-meta h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.1; }
+  .b-meta .author { margin: 0; color: var(--ink-2); font-size: 1.05rem; }
+  .b-meta .author a { color: var(--primary); text-decoration: none; }
+  .b-meta .author a:hover { text-decoration: underline; }
+  .b-meta .specs { margin-top: 8px; color: var(--ink-3); font-size: .9rem; }
+  .b-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+
+  .b-stats { display: flex; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
+  .b-stat { padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }
+  .b-stat .v { font-family: var(--serif); font-size: 1.3rem; }
+  .b-stat .l { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
+  .b-fit { margin-top: 24px; padding: 16px 20px; background: var(--primary-tint); border-radius: var(--r-md); border: 1px solid #DCE5DE; }
+  .b-fit .label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--primary); font-weight: 600; }
+  .b-fit p { margin: 4px 0 0; font-family: var(--serif); font-size: 1rem; line-height: 1.4; color: var(--ink); }
+
+  .b-section { margin-top: 32px; }
+  .b-section h2 { margin: 0 0 12px; }
+
+  .recap-out {
+    margin-top: 12px; padding: 14px 18px;
+    background: var(--surface-2); border-radius: var(--r-md);
+    font-family: var(--serif); font-size: 1rem; line-height: 1.45;
+    white-space: pre-line; min-height: 80px;
+  }
+
+  .reviews-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .rv-item {
+    display: grid; grid-template-columns: 32px 1fr; gap: 12px;
+    padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+  }
+  .rv-item .av { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; color: #FFF; font-family: var(--serif); font-size: .8rem; font-weight: 600; }
+  .rv-item .who { font-weight: 500; font-size: .9rem; }
+  .rv-item .stars { color: var(--accent); margin-top: 2px; font-size: .9rem; }
+  .rv-item .qt { color: var(--ink-2); font-style: italic; font-size: .9rem; margin-top: 4px; }
+  .rv-item .when { color: var(--ink-3); font-size: .75rem; margin-top: 4px; }
+
+  .empty-state { padding: 24px; text-align: center; color: var(--ink-3); border: 1px dashed var(--border); border-radius: var(--r-md); }
+  .err-banner { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; padding: 14px 18px; border-radius: var(--r-md); margin: 24px 0; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="index.html"><span class="brand-mark">C</span> Chaptr</a>
+    <div class="nav-links">
+      <a href="today.html">Today</a>
+      <a href="library.html">Library</a>
+      <a href="shelves.html">Shelves</a>
+      <a href="profile.html">Profile</a>
+    </div>
+    <div class="nav-cta">
+      <a href="library.html" class="btn btn-ghost btn-sm hide-sm">← Back</a>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+  <div id="bookMain" style="display:none;">
+    <section class="b-hero">
+      <div class="b-cover-lg" id="bCover"></div>
+      <div class="b-meta">
+        <h1 id="bTitle">Book</h1>
+        <p class="author">by <a id="bAuthorLink" href="#">Author</a></p>
+        <div class="specs" id="bSpecs">Genre · 320p</div>
+        <div class="b-actions">
+          <button class="btn btn-primary btn-sm" id="bBtnReading">📖 Reading</button>
+          <button class="btn btn-outline btn-sm" id="bBtnWant">+ Want to read</button>
+          <button class="btn btn-outline btn-sm" id="bBtnRead">✓ Read</button>
+        </div>
+        <div class="b-stats" id="bStats"></div>
+      </div>
+    </section>
+
+    <div class="b-fit" id="bFit" style="display:none;">
+      <span class="label">How this fits you</span>
+      <p id="bFitText"></p>
+    </div>
+
+    <section class="b-section" id="bRecapSection" style="display:none;">
+      <h2>What just happened?</h2>
+      <p class="muted" id="bRecapHint">You're at p.<span id="bRecapPage">0</span>. Tap below for a quick refresh on what you most likely just read.</p>
+      <button class="btn btn-outline btn-sm" id="bRecapBtn" style="margin-top:8px;">✨ Refresh my memory</button>
+      <div class="recap-out" id="bRecapOut" style="display:none;"></div>
+    </section>
+
+    <section class="b-section">
+      <h2>Reviews</h2>
+      <div id="bReviews"></div>
+    </section>
+  </div>
+
+  <div id="bookError" class="err-banner" style="display:none;"></div>
+</main>
+
+<footer class="footer">
+  <div class="container row">
+    <span>© Chaptr — a prototype.</span>
+    <span class="muted">Time is the new star rating.</span>
+  </div>
+</footer>
+
+<script src="app.js?v=30"></script>
+<script>
+  const { findBook, OL, Auth, Sync, Coach, ReviewsBackend, hashHue,
+          getShelves, moveToShelf, getBookProgress } = window.Chaptr;
+
+  const params = new URLSearchParams(location.search);
+  // Accept ?id=b1, or ?title=...&author=... for ad-hoc books from search results
+  const bookId = params.get('id');
+  const titleParam = params.get('title');
+  const authorParam = params.get('author');
+
+  function showError(msg) {
+    document.getElementById('bookError').style.display = '';
+    document.getElementById('bookError').textContent = msg;
+  }
+  function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function starString(rating) {
+    if (!rating) return '';
+    const full = Math.floor(rating);
+    const half = (rating - full) >= 0.5;
+    return '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(5 - full - (half ? 1 : 0));
+  }
+  function fmtAgo(iso) {
+    if (!iso) return '';
+    const ms = Date.now() - new Date(iso).getTime();
+    if (ms < 3600000) return `${Math.round(ms / 60000)}m ago`;
+    if (ms < 86400000) return `${Math.round(ms / 3600000)}h ago`;
+    return `${Math.round(ms / 86400000)}d ago`;
+  }
+
+  function renderShelfButtons(currentBook) {
+    const id = currentBook.id;
+    const s = getShelves();
+    const onShelf = ['reading', 'wantToRead', 'read'].find(k => s[k].includes(id));
+    const setActive = (which) => {
+      ['bBtnReading', 'bBtnWant', 'bBtnRead'].forEach(b => {
+        const el = document.getElementById(b);
+        el.classList.remove('btn-primary'); el.classList.add('btn-outline');
+      });
+      if (which === 'reading') document.getElementById('bBtnReading').classList.add('btn-primary');
+      if (which === 'wantToRead') document.getElementById('bBtnWant').classList.add('btn-primary');
+      if (which === 'read') document.getElementById('bBtnRead').classList.add('btn-primary');
+    };
+    setActive(onShelf);
+    document.getElementById('bBtnReading').addEventListener('click', () => { moveToShelf(id, 'reading'); setActive('reading'); });
+    document.getElementById('bBtnWant').addEventListener('click',    () => { moveToShelf(id, 'wantToRead'); setActive('wantToRead'); });
+    document.getElementById('bBtnRead').addEventListener('click',    () => { moveToShelf(id, 'read'); setActive('read'); });
+  }
+
+  async function bootstrap() {
+    let book;
+    if (bookId) {
+      book = findBook(bookId);
+    } else if (titleParam && authorParam) {
+      book = {
+        id: 'adhoc_' + btoa(titleParam + '|' + authorParam).replace(/[^A-Za-z0-9]/g, '').slice(0, 24),
+        title: titleParam, author: authorParam,
+        genre: params.get('genre') || 'Literary',
+        pages: parseInt(params.get('pages'), 10) || 320,
+        hue: hashHue(titleParam + authorParam),
+      };
+    } else {
+      showError('Missing book id or title/author in URL.');
+      return;
+    }
+    if (!book) { showError('Book not found.'); return; }
+    document.getElementById('bookMain').style.display = '';
+    document.title = book.title + ' · Chaptr';
+
+    document.getElementById('bTitle').textContent = book.title;
+    const link = document.getElementById('bAuthorLink');
+    link.textContent = book.author;
+    link.href = 'author.html?name=' + encodeURIComponent(book.author);
+    document.getElementById('bSpecs').textContent = `${book.genre} · ${book.pages}p`;
+    OL.applyCover(document.getElementById('bCover'), book, 'L');
+
+    renderShelfButtons(book);
+
+    // Lazy stats + fit + reviews
+    loadStats(book);
+    loadFit(book);
+    loadReviews(book);
+    setupRecap(book);
+  }
+
+  async function loadStats(book) {
+    const wrap = document.getElementById('bStats');
+    const stats = await ReviewsBackend.stats(book.id);
+    const timing = await ReviewsBackend.timing(book.id);
+    const parts = [];
+    if (stats?.count) {
+      parts.push(`<div class="b-stat"><div class="v"><span style="color:var(--accent);">${'★'.repeat(Math.round(stats.avgRating || 0))}</span> ${stats.avgRating}</div><div class="l">${stats.count} reader${stats.count === 1 ? '' : 's'}</div></div>`);
+    }
+    if (timing?.count) {
+      parts.push(`<div class="b-stat"><div class="v">${timing.avgHours}h</div><div class="l">avg finish (${timing.count})</div></div>`);
+    }
+    if (book.pages) {
+      const wpm = (window.Chaptr.Store.get('chaptr.wpm', 250) || 250);
+      const myHours = Math.round(book.pages * 275 / wpm / 60 * 10) / 10;
+      parts.push(`<div class="b-stat"><div class="v">~${myHours}h</div><div class="l">at your pace</div></div>`);
+    }
+    wrap.innerHTML = parts.join('');
+  }
+
+  async function loadFit(book) {
+    if (!Auth.configured()) return;
+    try { await Auth.load(); } catch {}
+    if (!Auth.signedIn()) return;
+    const r = await Coach.bookFit(book);
+    if (r?.text) {
+      document.getElementById('bFit').style.display = '';
+      document.getElementById('bFitText').textContent = r.text;
+    }
+  }
+
+  async function loadReviews(book) {
+    const wrap = document.getElementById('bReviews');
+    const reviews = await ReviewsBackend.publicReviews(book.id, 10);
+    if (!reviews.length) {
+      wrap.innerHTML = '<div class="empty-state">No public reviews yet. Yours could be the first.</div>';
+      return;
+    }
+    wrap.innerHTML = `<div class="reviews-list">${reviews.map(r => {
+      const hue = hashHue(r.user_id || 'r');
+      const init = (r.user_id || 'R').slice(-2).toUpperCase();
+      const bg = `linear-gradient(135deg, hsl(${hue},45%,40%), hsl(${(hue+40)%360},55%,55%))`;
+      return `<div class="rv-item">
+        <div class="av" style="background:${bg};">${init}</div>
+        <div>
+          <div class="who">Reader</div>
+          ${r.rating ? `<div class="stars">${starString(r.rating)}</div>` : ''}
+          ${r.text ? `<div class="qt">"${escapeHtml(r.text)}"</div>` : ''}
+          <div class="when">${fmtAgo(r.updated_at)}</div>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+  }
+
+  function setupRecap(book) {
+    // Only show recap if the user has progress on this book
+    const currentPage = getBookProgress(book.id);
+    if (!currentPage || currentPage <= 0) return;
+    document.getElementById('bRecapSection').style.display = '';
+    document.getElementById('bRecapPage').textContent = currentPage;
+    document.getElementById('bRecapBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('bRecapBtn');
+      const out = document.getElementById('bRecapOut');
+      btn.disabled = true; btn.textContent = 'Claude is thinking…';
+      out.style.display = '';
+      out.textContent = '';
+      const r = await Coach.chapterRecap({
+        title: book.title, author: book.author, currentPage, totalPages: book.pages,
+      });
+      btn.disabled = false; btn.textContent = '✨ Refresh my memory';
+      if (r?.text) { out.textContent = r.text; }
+      else { out.textContent = 'Could not get a recap: ' + (r?.error || 'unknown'); }
+    });
+  }
+
+  bootstrap().catch(e => showError('Failed: ' + e.message));
+</script>
+</body>
+</html>
