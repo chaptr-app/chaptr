@@ -240,15 +240,6 @@
           </div>
         </div>
       </div>
-      <div id="accountUnconfigured" style="display:none;">
-        <p class="muted" style="margin:0 0 8px;">Paste your Clerk publishable key to enable accounts:</p>
-        <div style="display:flex; gap:6px;">
-          <input type="text" id="clerkKeyInput" placeholder="pk_test_..."
-            style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink); font-family:monospace; font-size:.82rem;">
-          <button class="btn btn-outline btn-sm" id="saveClerkKeyBtn">Save</button>
-        </div>
-        <p class="muted" style="font-size:.78rem; margin-top:8px;">Get yours at <a href="https://dashboard.clerk.com" target="_blank">dashboard.clerk.com</a> → API keys.</p>
-      </div>
       <div id="authError" style="display:none; margin-top:12px; padding:10px 12px; background:#FEF2F2; color:var(--danger); border-radius:var(--r-sm); font-size:.85rem;"></div>
     </div>
   </section>
@@ -456,7 +447,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=33"></script>
+<script src="app.js?v=34"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
@@ -626,12 +617,10 @@
     return src.slice(0, 2).toUpperCase();
   }
   function renderAuth() {
-    const configured = Auth.configured();
     const signedIn = Auth.signedIn();
     const u = Auth.user();
-    document.getElementById('accountUnconfigured').style.display = configured ? 'none' : '';
-    document.getElementById('accountSignedOut').style.display   = (configured && !signedIn) ? '' : 'none';
-    document.getElementById('accountSignedIn').style.display    = (configured && signedIn) ? '' : 'none';
+    document.getElementById('accountSignedOut').style.display = signedIn ? 'none' : '';
+    document.getElementById('accountSignedIn').style.display  = signedIn ? '' : 'none';
     if (signedIn && u) {
       const name = u.fullName || u.firstName || u.username || '';
       const email = u.primaryEmailAddress?.emailAddress || u.emailAddresses?.[0]?.emailAddress || '';
@@ -680,18 +669,6 @@
     document.getElementById('followingCount').textContent = follows.following?.length || 0;
   }
   function wireAuth() {
-    document.getElementById('saveClerkKeyBtn').addEventListener('click', () => {
-      const v = document.getElementById('clerkKeyInput').value.trim();
-      const err = document.getElementById('authError');
-      err.style.display = 'none';
-      if (!/^pk_(test|live)_[A-Za-z0-9+/=_-]+$/.test(v)) {
-        err.style.display = '';
-        err.textContent = 'That doesn\'t look like a Clerk publishable key. Should start with pk_test_ or pk_live_.';
-        return;
-      }
-      Auth.setPublishableKey(v);
-      location.reload();
-    });
     document.getElementById('authSignInBtn').addEventListener('click', async () => {
       try { await Auth.openSignIn(); }
       catch (e) {

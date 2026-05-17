@@ -32,7 +32,14 @@ const Auth = {
   _loadPromise: null,
   _listeners: [],
 
-  publishableKey() { return (localStorage.getItem('chaptr.clerkKey') || '').replace(/^"|"$/g, ''); },
+  // Baked-in default — Chaptr's production Clerk instance. Publishable keys
+  // are safe to ship in client code (that's literally what they're for).
+  // Self-hosters can override by writing to localStorage 'chaptr.clerkKey'.
+  DEFAULT_CLERK_KEY: 'pk_test_b3JpZW50ZWQtc2x1Zy0xNy5jbGVyay5hY2NvdW50cy5kZXYk',
+  publishableKey() {
+    const override = (localStorage.getItem('chaptr.clerkKey') || '').replace(/^"|"$/g, '').trim();
+    return override || this.DEFAULT_CLERK_KEY;
+  },
   setPublishableKey(k) { localStorage.setItem('chaptr.clerkKey', (k || '').trim()); },
   configured() { return !!this.publishableKey(); },
   signedIn() { return !!this._user; },
