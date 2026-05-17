@@ -202,7 +202,7 @@
 
   <section class="section" style="margin-top:24px;">
     <div class="eyebrow">Account</div>
-    <h1 style="margin:6px 0 0;">Sign in to sync across devices.</h1>
+    <h1 id="accountHeading" style="margin:6px 0 0;">Sign in to sync across devices.</h1>
     <div class="card" style="margin-top:14px;" id="accountCard">
       <div id="accountSignedOut" style="display:none;">
         <p class="muted" style="margin:0 0 12px;">Not signed in. Your data is linked to this browser only.</p>
@@ -221,7 +221,7 @@
           <button class="btn btn-outline btn-sm" id="authSignOutBtn">Sign out</button>
         </div>
         <div style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--border);">
-          <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+          <div id="usernameEditor" style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
             <div style="flex:1; min-width:220px;">
               <label style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600;">Username</label>
               <div style="display:flex; gap:6px; margin-top:6px;">
@@ -651,7 +651,30 @@
   async function renderSocial() {
     if (!Auth.signedIn() || !Sync.enabled()) return;
     const profile = await Social.getMyProfile();
-    document.getElementById('usernameInput').value = profile?.username || '';
+    const username = profile?.username || '';
+    document.getElementById('usernameInput').value = username;
+
+    const heading = document.getElementById('accountHeading');
+    const editor = document.getElementById('usernameEditor');
+    const u = Auth.user();
+    const name = u?.fullName || u?.firstName || u?.username
+      || u?.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Reader';
+
+    if (username) {
+      // Username locked in — collapse the editor + put 'Name | @handle' in the heading.
+      // The @handle is clickable, which re-shows the editor for changes.
+      heading.innerHTML = `${escapeHtmlPlain(name)} <span style="color:var(--ink-3); font-weight:400;"> | </span><a href="#" id="changeUsernameLink" style="color:var(--primary); text-decoration:none;">@${escapeHtmlPlain(username)}</a>`;
+      editor.style.display = 'none';
+      document.getElementById('changeUsernameLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        editor.style.display = '';
+        document.getElementById('usernameInput').focus();
+      });
+    } else {
+      heading.textContent = name + ' — pick a username';
+      editor.style.display = '';
+    }
+
     const follows = await Social.getMyFollows();
     document.getElementById('followerCount').textContent = follows.followers?.length || 0;
     document.getElementById('followingCount').textContent = follows.following?.length || 0;
@@ -685,6 +708,8 @@
     });
     document.getElementById('authSignOutBtn').addEventListener('click', async () => {
       await Auth.signOut();
+      // Reset the heading to the not-signed-in default.
+      document.getElementById('accountHeading').textContent = 'Sign in to sync across devices.';
       renderAuth();
     });
     Auth.on(() => {
@@ -708,6 +733,9 @@
         await Social.updateMyProfile({ username: v });
         hint.style.color = 'var(--success)';
         hint.textContent = `✓ Saved. Friends can find you as @${v}.`;
+        // Refresh the heading + collapse the editor.
+        Social.invalidateProfile();
+        await renderSocial();
       } catch (e) {
         hint.style.color = 'var(--danger)';
         hint.textContent = e.message;
