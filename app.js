@@ -194,7 +194,14 @@ const Sync = {
     'chaptr.coachDismissedDay',
   ],
 
-  workerUrl() { return (localStorage.getItem('chaptr.workerUrl') || '').replace(/^"|"$/g, '').replace(/\/+$/, ''); },
+  // Baked-in default — Chaptr's production Cloudflare Worker. Public URL,
+  // safe to ship. Self-hosters can override by writing to localStorage
+  // 'chaptr.workerUrl'.
+  DEFAULT_WORKER_URL: 'https://chaptr-ask.isiah-williams.workers.dev',
+  workerUrl() {
+    const override = (localStorage.getItem('chaptr.workerUrl') || '').replace(/^"|"$/g, '').replace(/\/+$/, '');
+    return override || this.DEFAULT_WORKER_URL;
+  },
   enabled() { return !!this.workerUrl(); },
   status() {
     return {
