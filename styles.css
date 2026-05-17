@@ -381,3 +381,150 @@ button:active, .btn:active, .browse-chip:active, .ask-chip:active, .move-btn:act
   /* dialogs respect safe areas */
   .dialog-backdrop, .dlg-back { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 }
+
+/* ---------- COMPREHENSIVE MOBILE POLISH ---------- */
+@media (max-width: 720px) {
+  /* iOS auto-zooms <input>/<textarea>/<select> when font-size is under 16px on
+     focus, which yanks the layout sideways. Pin everything that takes focus
+     to 16px to stop that behavior. */
+  input[type="text"], input[type="email"], input[type="url"], input[type="number"],
+  input[type="search"], input[type="password"], input[type="tel"], input[type="date"],
+  select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Top-nav inline links collide with the bottom-nav. We already hide them at
+     720px (.nav-links). Reinforce here in case a specific page overrides. */
+  .nav-links { display: none !important; }
+  .nav-inner { padding: 8px 0; }
+  .brand { font-size: 1.2rem; }
+  .brand-mark { width: 30px; height: 30px; }
+
+  /* Container side-padding tightens on phones so cards aren't crowded. */
+  .container { padding-left: max(16px, env(safe-area-inset-left));
+               padding-right: max(16px, env(safe-area-inset-right)); }
+
+  /* H1/H2 don't need to be desktop-huge on a phone. clamp() already does
+     most of this but harden specific pages where copy is long. */
+  h1 { font-size: clamp(1.6rem, 7vw, 2.4rem); }
+  h2 { font-size: clamp(1.3rem, 5vw, 1.8rem); }
+
+  /* Cards: less internal padding on phones so content has room. */
+  .card { padding: 16px; }
+  .card-lg { padding: 20px; }
+
+  /* Profile stats row: 2x2 instead of 1x4. Each tile still has the same height. */
+  .stats-row { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+  .stat-tile { padding: 14px !important; }
+  .stat-tile .value { font-size: 1.6rem !important; }
+
+  /* Account card (Profile): the avatar+name+email+SignOut row should wrap
+     gracefully on narrow screens. Inner min-width relaxed so it doesn't
+     force the parent wider than the card. */
+  #accountSignedIn > div:first-child {
+    flex-wrap: wrap;
+  }
+  #accountSignedIn > div:first-child > div[style*="min-width:200px"],
+  #accountSignedIn > div:first-child > div[style*="min-width: 200px"] {
+    min-width: 0 !important;
+  }
+  #accountSignedIn > div:first-child > button#authSignOutBtn {
+    margin-left: auto;
+  }
+  /* Username editor's inner block had min-width:220px; let it shrink too. */
+  #usernameEditor > div[style*="min-width:220px"],
+  #usernameEditor > div[style*="min-width: 220px"] {
+    min-width: 0 !important;
+  }
+
+  /* Account heading: hide the "Sign in to sync across devices." h1 from being
+     huge on mobile — it's already clamp'd but the long sentence wraps poorly. */
+  #accountHeading { font-size: clamp(1.4rem, 6vw, 2rem); line-height: 1.1; }
+
+  /* Account 'change' link inside the heading shouldn't dwarf the name. */
+  #accountHeading a { font-size: .95em; }
+
+  /* Modals: cap height so they fit on small viewports + allow inner scrolling. */
+  .dlg-card, .dlg-back .dlg-card,
+  .v3-dlg-card,
+  .invite-dlg-card,
+  #friendsDlg > div {
+    max-height: calc(100vh - 32px - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* The Find Friends and New Group Challenge modals nest a scrolling results
+     list — keep it scrollable independent of the outer modal scroll. */
+  #friendsResults, #fcInviteResults, #inviteSearchResults {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  /* Settings rows: stack the input + Save button vertically when label and
+     input are competing for the same row. */
+  .settings-row {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .settings-row > input[type="number"] { width: 100%; max-width: 100%; }
+
+  /* AI toggle rows: keep the switch flush right but allow long descriptions to wrap. */
+  .ai-row { flex-wrap: nowrap; }
+  .ai-row .ai-meta { min-width: 0; flex: 1; }
+
+  /* Annual challenge controls stack under the ring instead of beside it. */
+  .yc-row { grid-template-columns: 1fr !important; text-align: center; }
+  .yc-ring { margin: 0 auto; }
+  .yc-controls { align-items: stretch; }
+
+  /* Recent rows on Today (history list) cram 5 columns into a phone. Drop
+     the page count column on narrow screens; mood and minutes remain. */
+  .recent-row { grid-template-columns: auto 1fr auto auto !important; }
+  .recent-row .col-title { font-size: .88rem; }
+  .recent-row > :nth-child(4) { display: none; } /* hide pages column */
+
+  /* For You carousel (Library): tighten the cards so two-and-a-bit show
+     instead of 1.2. */
+  .foryou .rec-card { flex-basis: 220px !important; }
+
+  /* Browse chips wrap rather than overflow */
+  .chips { gap: 6px; }
+  .browse-chip { font-size: .82rem; padding: 8px 12px; }
+
+  /* Bottom nav: at very narrow widths (small phones, large fonts) drop the
+     labels and show icon-only so 5 tabs fit without label truncation. */
+  @media (max-width: 380px) {
+    .bottom-nav .bn-label { display: none; }
+    .bottom-nav a { gap: 0; padding: 12px 0; }
+    .bottom-nav .bn-icon svg { width: 24px; height: 24px; }
+  }
+
+  /* Pill/badge inline content sometimes overflows tight rows. */
+  .pill { font-size: .72rem; padding: 4px 10px; }
+
+  /* Friend feed item: collapse the "when" column to a sub-line on tight screens
+     (already partially handled in feed-item but tighten further) */
+  .feed-item { gap: 10px; padding: 12px; }
+  .feed-item .feed-cover { width: 40px; height: 58px; }
+  .feed-item .when { font-size: .72rem; }
+
+  /* Now-reading pill: keep it within thumb reach without overlapping content. */
+  .now-reading-pill {
+    padding: 8px 12px 8px 8px;
+    max-width: calc(100% - 24px);
+  }
+  .now-reading-pill .nrp-title { font-size: .92rem; }
+  .now-reading-pill .nrp-time { font-size: 1rem; }
+
+  /* Form inputs in dialogs: full width by default on mobile */
+  .v3-field input, .review-text { width: 100%; }
+}
+
+/* Extra-narrow (e.g. iPhone SE, older Android phones, large accessibility text) */
+@media (max-width: 360px) {
+  .container { padding-left: 12px; padding-right: 12px; }
+  .card { padding: 14px; }
+  /* Profile stats: single column at the absolute narrowest */
+  .stats-row { grid-template-columns: 1fr !important; }
+}
