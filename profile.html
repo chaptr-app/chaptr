@@ -200,14 +200,56 @@
 
 <main class="container">
 
-  <section class="profile-head">
-    <div class="avatar">R</div>
-    <div class="profile-name">
-      <h1 id="readerName">Reader</h1>
-      <div class="muted" id="readerSince">Reading on Chaptr</div>
-    </div>
-    <div class="actions hide-sm">
-      <a href="library.html" class="btn btn-outline btn-sm">Browse Library</a>
+  <section class="section" style="margin-top:24px;">
+    <div class="eyebrow">Account</div>
+    <h1 style="margin:6px 0 0;">Sign in to sync across devices.</h1>
+    <div class="card" style="margin-top:14px;" id="accountCard">
+      <div id="accountSignedOut" style="display:none;">
+        <p class="muted" style="margin:0 0 12px;">Not signed in. Your data is linked to this browser only.</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-primary" id="authSignInBtn">Sign in</button>
+          <button class="btn btn-outline" id="authSignUpBtn">Create account</button>
+        </div>
+      </div>
+      <div id="accountSignedIn" style="display:none;">
+        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+          <div class="avatar" id="authAvatar" style="width:48px; height:48px; font-size:1.2rem;">–</div>
+          <div style="flex:1; min-width:200px;">
+            <div style="font-weight:600;" id="authUserName">Reader</div>
+            <div class="muted" style="font-size:.85rem;" id="authUserEmail"></div>
+          </div>
+          <button class="btn btn-outline btn-sm" id="authSignOutBtn">Sign out</button>
+        </div>
+        <div style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--border);">
+          <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+            <div style="flex:1; min-width:220px;">
+              <label style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600;">Username</label>
+              <div style="display:flex; gap:6px; margin-top:6px;">
+                <span style="display:inline-flex; align-items:center; color:var(--ink-3); font-family:monospace;">@</span>
+                <input type="text" id="usernameInput" placeholder="your_handle"
+                  style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; font-family:monospace; background:var(--bg); color:var(--ink);">
+                <button class="btn btn-primary btn-sm" id="saveUsernameBtn">Save</button>
+              </div>
+              <div class="muted" id="usernameHint" style="font-size:.78rem; margin-top:6px;">3–24 chars, letters/numbers/_- only. Friends find you with this.</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:18px; align-items:center; margin-top:14px;">
+            <div><span style="font-family:var(--serif); font-size:1.4rem;" id="followerCount">0</span> <span class="muted" style="font-size:.85rem;">followers</span></div>
+            <div><span style="font-family:var(--serif); font-size:1.4rem;" id="followingCount">0</span> <span class="muted" style="font-size:.85rem;">following</span></div>
+            <button class="btn btn-outline btn-sm" id="findFriendsBtn" style="margin-left:auto;">Find friends</button>
+          </div>
+        </div>
+      </div>
+      <div id="accountUnconfigured" style="display:none;">
+        <p class="muted" style="margin:0 0 8px;">Paste your Clerk publishable key to enable accounts:</p>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="clerkKeyInput" placeholder="pk_test_..."
+            style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink); font-family:monospace; font-size:.82rem;">
+          <button class="btn btn-outline btn-sm" id="saveClerkKeyBtn">Save</button>
+        </div>
+        <p class="muted" style="font-size:.78rem; margin-top:8px;">Get yours at <a href="https://dashboard.clerk.com" target="_blank">dashboard.clerk.com</a> → API keys.</p>
+      </div>
+      <div id="authError" style="display:none; margin-top:12px; padding:10px 12px; background:#FEF2F2; color:var(--danger); border-radius:var(--r-sm); font-size:.85rem;"></div>
     </div>
   </section>
 
@@ -217,6 +259,16 @@
     <div class="card stat-tile"><div class="label">Sessions</div><div class="value" id="psSessions">0</div><div class="sub">logged so far</div></div>
     <div class="card stat-tile"><div class="label">Avg WPM</div><div class="value" id="psWpm">—</div><div class="sub">trailing average</div></div>
   </div>
+
+  <section class="section">
+    <div class="eyebrow">Reader Persona · this week</div>
+    <h2>Your reading DNA.</h2>
+    <div class="card persona-card" style="margin-top:14px;">
+      <div class="eyebrow">Claude's read of you</div>
+      <p class="quote" id="personaText">Tap "Start session" on Today and log a few reads. Once there's data, this card describes you as a reader: pace, preferred genres, peak hours, and what books are most likely to land for you.</p>
+      <div class="signals" id="personaSignals">Based on: WPM by genre · session-time distribution · mood tags</div>
+    </div>
+  </section>
 
   <section class="section">
     <div class="eyebrow">Annual challenge · <span id="ycYear"></span></div>
@@ -272,16 +324,6 @@
   </section>
 
   <section class="section">
-    <div class="eyebrow">Reader Persona · this week</div>
-    <h2>Your reading DNA.</h2>
-    <div class="card persona-card" style="margin-top:14px;">
-      <div class="eyebrow">Claude's read of you</div>
-      <p class="quote" id="personaText">Tap "Start session" on Today and log a few reads. Once there's data, this card describes you as a reader: pace, preferred genres, peak hours, and what books are most likely to land for you.</p>
-      <div class="signals" id="personaSignals">Based on: WPM by genre · session-time distribution · mood tags</div>
-    </div>
-  </section>
-
-  <section class="section">
     <div class="eyebrow">Reading calendar · last 12 months</div>
     <h2>Every day you opened a book.</h2>
     <div class="card" style="margin-top:14px;">
@@ -319,59 +361,6 @@
         <div class="mood-cell"><div class="em">😴</div><div class="ct" id="moodSleepy">0</div><div class="lb">sleepy</div></div>
         <div class="mood-cell"><div class="em">🤯</div><div class="ct" id="moodWow">0</div><div class="lb">mind-blown</div></div>
       </div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="eyebrow">Account</div>
-    <h2>Sign in to sync across devices.</h2>
-    <div class="card" style="margin-top:14px;" id="accountCard">
-      <div id="accountSignedOut" style="display:none;">
-        <p class="muted" style="margin:0 0 12px;">Not signed in. Your data is linked to this browser only.</p>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button class="btn btn-primary" id="authSignInBtn">Sign in</button>
-          <button class="btn btn-outline" id="authSignUpBtn">Create account</button>
-        </div>
-      </div>
-      <div id="accountSignedIn" style="display:none;">
-        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
-          <div class="avatar" id="authAvatar" style="width:48px; height:48px; font-size:1.2rem;">–</div>
-          <div style="flex:1; min-width:200px;">
-            <div style="font-weight:600;" id="authUserName">Reader</div>
-            <div class="muted" style="font-size:.85rem;" id="authUserEmail"></div>
-          </div>
-          <button class="btn btn-outline btn-sm" id="authSignOutBtn">Sign out</button>
-        </div>
-        <div style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--border);">
-          <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
-            <div style="flex:1; min-width:220px;">
-              <label style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600;">Username</label>
-              <div style="display:flex; gap:6px; margin-top:6px;">
-                <span style="display:inline-flex; align-items:center; color:var(--ink-3); font-family:monospace;">@</span>
-                <input type="text" id="usernameInput" placeholder="your_handle"
-                  style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; font-family:monospace; background:var(--bg); color:var(--ink);">
-                <button class="btn btn-primary btn-sm" id="saveUsernameBtn">Save</button>
-              </div>
-              <div class="muted" id="usernameHint" style="font-size:.78rem; margin-top:6px;">3–24 chars, letters/numbers/_- only. Friends find you with this.</div>
-            </div>
-          </div>
-          <div style="display:flex; gap:18px; align-items:center; margin-top:14px;">
-            <div><span style="font-family:var(--serif); font-size:1.4rem;" id="followerCount">0</span> <span class="muted" style="font-size:.85rem;">followers</span></div>
-            <div><span style="font-family:var(--serif); font-size:1.4rem;" id="followingCount">0</span> <span class="muted" style="font-size:.85rem;">following</span></div>
-            <button class="btn btn-outline btn-sm" id="findFriendsBtn" style="margin-left:auto;">Find friends</button>
-          </div>
-        </div>
-      </div>
-      <div id="accountUnconfigured" style="display:none;">
-        <p class="muted" style="margin:0 0 8px;">Paste your Clerk publishable key to enable accounts:</p>
-        <div style="display:flex; gap:6px;">
-          <input type="text" id="clerkKeyInput" placeholder="pk_test_..."
-            style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink); font-family:monospace; font-size:.82rem;">
-          <button class="btn btn-outline btn-sm" id="saveClerkKeyBtn">Save</button>
-        </div>
-        <p class="muted" style="font-size:.78rem; margin-top:8px;">Get yours at <a href="https://dashboard.clerk.com" target="_blank">dashboard.clerk.com</a> → API keys.</p>
-      </div>
-      <div id="authError" style="display:none; margin-top:12px; padding:10px 12px; background:#FEF2F2; color:var(--danger); border-radius:var(--r-sm); font-size:.85rem;"></div>
     </div>
   </section>
 
