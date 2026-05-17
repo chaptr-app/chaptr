@@ -316,15 +316,16 @@ button:active, .btn:active, .browse-chip:active, .ask-chip:active, .move-btn:act
     align-items: center;
     justify-content: center;
     gap: 3px;
-    padding: 10px 4px;
+    padding: 10px 2px;
     min-height: 56px;
     color: var(--ink-3);
     text-decoration: none;
-    font-size: .7rem;
+    font-size: .66rem;
     font-weight: 500;
-    letter-spacing: .02em;
+    letter-spacing: .01em;
     -webkit-tap-highlight-color: transparent;
     transition: color .15s;
+    white-space: nowrap;
   }
   .bottom-nav a.active { color: var(--primary); }
   .bottom-nav a:active { background: var(--primary-tint); }
