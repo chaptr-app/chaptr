@@ -298,7 +298,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=35"></script>
+<script src="app.js?v=36"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
@@ -437,7 +437,7 @@
           const cls = target === activeShelf ? 'move-btn current' : 'move-btn';
           const dis = target === activeShelf ? 'disabled' : '';
           return `<button class="${cls}" data-book="${id}" data-target="${target}" ${dis}>${shelfLabels[target]}</button>`;
-        }).join('');
+        }).join('') + `<button class="move-btn" data-remove-system="${id}" title="Remove from this shelf">✕</button>`;
       }
       const tagged = customShelvesContaining(id);
       const tagBtn = `<button class="tag-btn ${tagged.length ? 'has-tags' : ''}" data-tag="${id}">${tagged.length ? `Tags · ${tagged.length}` : '+ Tag'}</button>`;
@@ -480,6 +480,16 @@
     el.querySelectorAll('[data-remove-custom]').forEach(btn => {
       btn.addEventListener('click', () => {
         removeFromCustomShelf(activeShelf, btn.dataset.removeCustom);
+        renderAll();
+      });
+    });
+    // Remove from system shelf (or kick the book out entirely with confirmation)
+    el.querySelectorAll('[data-remove-system]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.removeSystem;
+        const b = findBook(id);
+        if (!confirm(`Remove "${b.title}" from your shelves?\n\n(This won't delete it — it just takes it off Reading / Want / Read. You can add it back from Library.)`)) return;
+        moveToShelf(id, null);
         renderAll();
       });
     });

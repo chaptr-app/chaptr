@@ -550,7 +550,50 @@ function startSession(bookId, opts = {}) {
   const now = Date.now();
   const format = opts.format === 'audio' ? 'audio' : 'print';
   const speed = format === 'audio' ? Math.max(0.5, Math.min(3, parseFloat(opts.speed) || 1)) : 1;
-  Store.set(K.session, { bookId, startedAt: now, elapsedMs: 0, paused: false, lastResumeAt: now, format, speed });
+  const startPage = Number.isFinite(opts.startPage) && opts.startPage >= 0 ? Math.floor(opts.startPage) : null;
+  Store.set(K.session, { bookId, startedAt: now, elapsedMs: 0, paused: false, lastResumeAt: now, format, speed, startPage });
+}
+
+// Log a session manually (no timer ran). Useful when a user reads away from
+// the app and wants to backfill credit. Persists with format='print' unless
+// overridden. Date can be any YYYY-MM-DD; defaults to today.
+function logManualSession({ bookId, minutes, startPage, endPage, mood, date, format = 'print', speed = 1 }) {
+  if (!bookId) return null;
+  const mins = Math.max(1, parseInt(minutes, 10) || 0);
+  if (!mins) return null;
+  const ms = mins * 60000;
+  const sPg = Number.isFinite(startPage) && startPage >= 0 ? Math.floor(startPage) : 0;
+  const ePg = Number.isFinite(endPage)   && endPage   >= 0 ? Math.floor(endPage)   : 0;
+  const pages = Math.max(0, ePg - sPg);
+  const wpm = mins > 0 && pages > 0 ? Math.round((pages * 275) / mins) : null;
+  const effectiveMinutes = format === 'audio' ? Math.round(mins * (speed || 1)) : mins;
+  const entry = {
+    bookId,
+    date: date || new Date().toISOString().slice(0, 10),
+    startedAt: null,
+    minutes: mins,
+    ms,
+    pages,
+    wpm,
+    mood: mood || null,
+    format,
+    speed,
+    effectiveMinutes,
+    manual: true,
+  };
+  const hist = Store.get(K.history, []);
+  hist.push(entry);
+  Store.set(K.history, hist);
+  if (wpm) {
+    Store.set(K.wpm, wpm);
+    const bw = Store.get(K.bookWpm, {});
+    const arr = bw[bookId] || [];
+    arr.push(wpm);
+    bw[bookId] = arr.slice(-10);
+    Store.set(K.bookWpm, bw);
+  }
+  if (ePg > 0) setBookProgress(bookId, ePg);
+  return entry;
 }
 function pauseSession() {
   const s = getSession(); if (!s || s.paused) return;
@@ -941,9 +984,9 @@ function getLast14Days() {
 // ---------- shelves ----------
 function getShelves() {
   return Store.get(K.shelves, {
-    reading: ['b2'],
-    wantToRead: ['b3', 'b4', 'b1'],
-    read: ['b6'],
+    reading: [],
+    wantToRead: [],
+    read: [],
   });
 }
 function setShelves(s) { Store.set(K.shelves, s); }
@@ -1981,7 +2024,7 @@ window.Chaptr = {
   Store, K, CATALOG, COVER_GRADIENTS, hashHue, findBook,
   getCustomBooks, addCustomBook,
   COACH_NUDGES, pickCoachNudge, FOR_YOU, askClaude,
-  startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
+  startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs, logManualSession,
   getTodayMinutes, getStreak, getLast14Days, computeWeekRecap,
   getYearActivity, activityLevel,
   tryEarnStreakFreeze, getStreakFreezeCount, getStreakWithFreezes,

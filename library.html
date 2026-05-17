@@ -93,9 +93,29 @@
   /* OpenLibrary search */
   .search-card { background: var(--surface); }
   .search-card .ask-input-row { margin-top: 14px; }
-  .search-status { margin-top: 12px; font-size: .85rem; color: var(--ink-3); min-height: 1.2em; }
-  .search-results { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
-  .search-card .rec-card { background: var(--surface); }
+  .search-status { margin-top: 12px; font-size: .85rem; color: var(--ink-3); min-height: 1.2em; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .search-view-toggle { display: inline-flex; gap: 0; border: 1px solid var(--border); border-radius: var(--r-pill); overflow: hidden; }
+  .search-view-toggle button {
+    padding: 6px 12px; background: transparent; color: var(--ink-3); font: inherit;
+    font-size: .78rem; cursor: pointer; border: 0; -webkit-tap-highlight-color: transparent;
+  }
+  .search-view-toggle button.active { background: var(--primary-tint); color: var(--primary); }
+  /* Grid view: smaller, denser cards (was minmax(200px) → now 150px) */
+  .search-results { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .search-results .rec-card { padding: 10px; gap: 8px; background: var(--surface); }
+  .search-results .rec-card .cover-lg { aspect-ratio: 2/3; }
+  .search-results .rec-card .title { font-size: .9rem; line-height: 1.15; }
+  .search-results .rec-card .author { font-size: .75rem; }
+  /* List view: full-width rows, tiny cover on the left */
+  .search-results.list-view { grid-template-columns: 1fr; gap: 6px; }
+  .search-results.list-view .rec-card {
+    flex-direction: row; align-items: center; padding: 10px;
+  }
+  .search-results.list-view .rec-card .cover-lg {
+    width: 40px; height: 60px; aspect-ratio: auto; flex-shrink: 0;
+  }
+  .search-results.list-view .rec-card > div:nth-child(2) { flex: 1; min-width: 0; }
+  .search-results.list-view .rec-card .why { padding-top: 0; border: 0; margin: 0; flex-shrink: 0; }
   .search-card .added { color: var(--success); font-weight: 600; font-size: .82rem; }
 
   /* image-backed covers should fill the box, gradient still appears as bg fallback */
@@ -180,7 +200,13 @@
       <input class="ask-input" id="searchInput" placeholder="Pachinko · Min Jin Lee · or just 'space opera'">
       <button class="btn btn-primary" id="searchBtn">Search</button>
     </div>
-    <div class="search-status" id="searchStatus"></div>
+    <div class="search-status">
+      <span id="searchStatus"></span>
+      <div class="search-view-toggle" id="searchViewToggle" style="display:none;">
+        <button data-view="grid" class="active" aria-label="Grid view">▦ Grid</button>
+        <button data-view="list" aria-label="List view">≡ List</button>
+      </div>
+    </div>
     <div class="search-results" id="searchResults"></div>
   </div>
 
@@ -246,7 +272,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=35"></script>
+<script src="app.js?v=36"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
@@ -550,13 +576,16 @@
     const q = (query || '').trim();
     const statusEl = document.getElementById('searchStatus');
     const resEl = document.getElementById('searchResults');
-    if (!q) { statusEl.textContent = ''; resEl.innerHTML = ''; return; }
+    const toggle = document.getElementById('searchViewToggle');
+    if (!q) { statusEl.textContent = ''; resEl.innerHTML = ''; toggle.style.display = 'none'; return; }
     statusEl.textContent = 'Searching OpenLibrary…';
     resEl.innerHTML = '';
+    toggle.style.display = 'none';
     const token = (searchInFlight = Symbol());
     try {
       const results = await OL.search(q);
       if (token !== searchInFlight) return;
+      toggle.style.display = results.length ? '' : 'none';
       if (!results.length) { statusEl.textContent = 'No matches. Try a different query.'; return; }
       statusEl.textContent = `Showing ${results.length} results.`;
       const onShelf = (id) => {
@@ -706,6 +735,16 @@
       OL.applyCover(node, findBook(it.bookId), 'S');
     });
   }
+
+  // Search view toggle (grid vs list)
+  document.querySelectorAll('#searchViewToggle button').forEach(b => {
+    b.addEventListener('click', () => {
+      const view = b.dataset.view;
+      document.querySelectorAll('#searchViewToggle button').forEach(x =>
+        x.classList.toggle('active', x.dataset.view === view));
+      document.getElementById('searchResults').classList.toggle('list-view', view === 'list');
+    });
+  });
 
   // init
   renderTrending();

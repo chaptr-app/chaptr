@@ -20,8 +20,29 @@
   .today-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; align-items: start; margin-top: 24px; }
   @media (max-width: 880px) { .today-grid { grid-template-columns: 1fr; } }
 
-  .greeting { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-top: 32px; flex-wrap: wrap; }
-  .greeting h1 { margin-bottom: .15em; }
+  /* compact greeting — centered, lightweight */
+  .greeting-compact { text-align: center; margin: 32px 0 18px; }
+  .greeting-compact h1 { margin: 4px 0 14px; font-size: clamp(1.8rem, 5vw, 2.4rem); }
+  .quick-stats {
+    display: inline-flex; align-items: center; gap: 18px;
+    padding: 8px 18px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--r-pill);
+    font-size: .9rem;
+  }
+  @media (max-width: 480px) { .quick-stats { gap: 12px; padding: 8px 14px; font-size: .82rem; } }
+  .qs-streak, .qs-goal { display: inline-flex; align-items: center; gap: 6px; }
+  .qs-streak { color: var(--ink); }
+  .qs-icon { font-size: 1rem; }
+  .qs-num { font-family: var(--serif); font-size: 1.05rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .qs-lbl { color: var(--ink-3); font-size: .82rem; }
+  .qs-freeze { color: var(--ink-3); margin-left: 2px; }
+  .qs-goal { padding-left: 18px; border-left: 1px solid var(--border); }
+  @media (max-width: 480px) { .qs-goal { padding-left: 12px; } }
+  .qs-ring { width: 28px; height: 28px; margin-left: 4px; }
+
+  /* Currently reading hero (full-width, prominent) */
+  .cc-hero { margin-top: 4px; }
+  /* legacy class kept for now */
   .stat-row { display: flex; gap: 12px; flex-wrap: wrap; }
   .stat {
     display: flex; flex-direction: column; align-items: center; gap: 4px;
@@ -313,33 +334,49 @@
 
 <main class="container">
 
-  <section class="greeting">
-    <div>
-      <div class="eyebrow" id="dateLabel">Today</div>
-      <h1 id="greetingMsg">Good evening.</h1>
-      <p class="muted">Your reading habit, one chapter at a time.</p>
-    </div>
-    <div class="stat-row">
-      <div class="stat">
-        <div class="stat-value" id="streakValue">0</div>
-        <div class="stat-label">Day streak</div>
-        <div class="streak-pill" id="streakFreezes" style="display:none;">❄ <span id="streakFreezeCount">0</span></div>
+  <section class="greeting-compact">
+    <div class="eyebrow" id="dateLabel">Today</div>
+    <h1 id="greetingMsg">Good evening.</h1>
+    <div class="quick-stats">
+      <div class="qs-streak">
+        <span class="qs-icon">🔥</span>
+        <span class="qs-num" id="streakValue">0</span>
+        <span class="qs-lbl">day streak</span>
+        <span class="qs-freeze" id="streakFreezes" style="display:none;">· ❄ <span id="streakFreezeCount">0</span></span>
       </div>
-      <div class="stat">
-        <div class="ring-wrap">
-          <svg viewBox="0 0 110 110">
-            <circle class="ring-bg" cx="55" cy="55" r="46"></circle>
-            <circle class="ring-fg" cx="55" cy="55" r="46"
-                    stroke-dasharray="289.03" stroke-dashoffset="289.03" id="ringFg"></circle>
-          </svg>
-          <div class="ring-center">
-            <div class="ring-pct" id="ringMinutes">0</div>
-            <div class="ring-cap">of <span id="ringGoal">20</span> min</div>
-          </div>
-        </div>
+      <div class="qs-goal">
+        <span class="qs-num"><span id="ringMinutes">0</span> / <span id="ringGoal">20</span></span>
+        <span class="qs-lbl" id="ringUnitLabel">min today</span>
+        <svg class="qs-ring" viewBox="0 0 36 36">
+          <circle class="ring-bg" cx="18" cy="18" r="15" fill="none" stroke="var(--surface-2)" stroke-width="3"></circle>
+          <circle class="ring-fg" cx="18" cy="18" r="15" fill="none" stroke="var(--primary)" stroke-width="3"
+                  stroke-linecap="round" stroke-dasharray="94.25" stroke-dashoffset="94.25"
+                  transform="rotate(-90 18 18)" id="ringFg"></circle>
+        </svg>
       </div>
     </div>
   </section>
+
+  <div class="card cc-hero" id="currentBookCard">
+    <div class="eyebrow">Currently reading</div>
+    <div class="book-card" style="margin-top:10px;">
+      <div class="cover" id="ccCover"></div>
+      <div class="book-meta">
+        <div class="title"><a id="ccTitle" href="#" style="color:inherit; text-decoration:none;"></a></div>
+        <div class="author" id="ccAuthor"></div>
+        <div class="progress"><span id="ccProgress" style="width:38%;"></span></div>
+        <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:.78rem; color:var(--ink-3);">
+          <span><span id="ccPct">38</span>% · p.<span id="ccPage">120</span></span>
+          <span id="ccTimeLeft">~3h 20m left</span>
+        </div>
+        <div class="cc-last" id="ccLast" style="display:none;"></div>
+      </div>
+    </div>
+    <div class="resume-row">
+      <button class="btn btn-primary" id="btnResumeReading" style="width:100%;">Resume reading</button>
+    </div>
+    <button class="btn btn-outline btn-sm" id="readWithFriendBtn" style="margin-top:10px; width:100%; display:none;">+ Read with a friend</button>
+  </div>
 
   <div class="card week-card" id="weekCard" style="display:none;">
     <div class="week-head">
@@ -396,6 +433,7 @@
         <div class="timer-controls" id="timerControls">
           <button class="btn btn-primary btn-lg" id="btnStart">Start session</button>
         </div>
+        <div class="timer-extras" id="timerExtras" style="display:flex; justify-content:center; margin-top:8px;"></div>
         <div class="format-row" id="formatRow">
           <div class="format-toggle" id="formatToggle">
             <button data-fmt="print" class="active">📖 Print</button>
@@ -426,7 +464,7 @@
         <div class="row between" style="align-items:center; margin-bottom:6px;">
           <div>
             <div class="eyebrow">History</div>
-            <h3 style="margin-top:6px; margin-bottom:0;">Last 14 days</h3>
+            <h3 style="margin-top:6px; margin-bottom:0;">Last 7 days</h3>
           </div>
           <span class="pill" id="totalThisWeek">0 min this week</span>
         </div>
@@ -437,28 +475,7 @@
 
     <!-- RIGHT: current book + coach -->
     <div>
-      <div class="card" id="currentBookCard">
-        <div class="eyebrow">Currently reading</div>
-        <div class="book-card" style="margin-top:10px;">
-          <div class="cover" id="ccCover"></div>
-          <div class="book-meta">
-            <div class="title"><a id="ccTitle" href="#" style="color:inherit; text-decoration:none;"></a></div>
-            <div class="author" id="ccAuthor"></div>
-            <div class="progress"><span id="ccProgress" style="width:38%;"></span></div>
-            <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:.78rem; color:var(--ink-3);">
-              <span><span id="ccPct">38</span>% · p.<span id="ccPage">120</span></span>
-              <span id="ccTimeLeft">~3h 20m left</span>
-            </div>
-            <div class="cc-last" id="ccLast" style="display:none;"></div>
-          </div>
-        </div>
-        <div class="resume-row">
-          <button class="btn btn-primary" id="btnResumeReading" style="width:100%;">Resume reading</button>
-        </div>
-        <button class="btn btn-outline btn-sm" id="readWithFriendBtn" style="margin-top:10px; width:100%; display:none;">+ Read with a friend</button>
-      </div>
-
-      <div class="card coach" style="margin-top:18px;">
+      <div class="card coach">
         <button class="dismiss" id="coachDismiss" aria-label="Dismiss">✕</button>
         <div class="eyebrow"><span class="coach-dot"></span> Reading Coach</div>
         <p id="coachText"></p>
@@ -500,6 +517,39 @@
 </footer>
 
 <!-- end-of-session dialog -->
+<div class="dialog-backdrop" id="manualDlg">
+  <div class="dialog" role="dialog" aria-modal="true">
+    <h3 style="margin-bottom:.2em;">Log a past session</h3>
+    <p class="muted" style="margin-bottom:8px;">Read away from the app? Backfill the credit here.</p>
+    <div class="field">
+      <label>Book</label>
+      <select id="manualBook" style="padding:12px 14px; border:1px solid var(--border); border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink);"></select>
+    </div>
+    <div class="field">
+      <label>Minutes read</label>
+      <input id="manualMinutes" type="number" min="1" value="30">
+    </div>
+    <div style="display:flex; gap:10px;">
+      <div class="field" style="flex:1;">
+        <label>From page (optional)</label>
+        <input id="manualStartPage" type="number" min="0" value="0">
+      </div>
+      <div class="field" style="flex:1;">
+        <label>To page (optional)</label>
+        <input id="manualEndPage" type="number" min="0" value="0">
+      </div>
+    </div>
+    <div class="field">
+      <label>Date</label>
+      <input id="manualDate" type="date">
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost" id="cancelManual">Cancel</button>
+      <button class="btn btn-primary" id="confirmManual">Log session</button>
+    </div>
+  </div>
+</div>
+
 <div class="dialog-backdrop" id="stopDialog">
   <div class="dialog" role="dialog" aria-modal="true">
     <h3 style="margin-bottom:.2em;">Wrap this session</h3>
@@ -528,7 +578,7 @@
   </div>
 </div>
 
-<script src="app.js?v=35"></script>
+<script src="app.js?v=36"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -537,7 +587,7 @@
   });
 
   const { CATALOG, COVER_GRADIENTS, findBook, pickCoachNudge,
-          startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs,
+          startSession, pauseSession, resumeSession, stopSession, getSession, elapsedMs, logManualSession,
           getTodayMinutes, getStreak, getLast14Days, computeWeekRecap,
           getStreakWithFreezes,
           getUpNext, addToUpNext, removeFromUpNext, moveUpNext, promoteUpNext, MAX_UP_NEXT,
@@ -561,7 +611,7 @@
   }
 
   const DAILY_GOAL_MIN = Store.get(K.dailyGoalMin, 20);
-  const RING_CIRC = 2 * Math.PI * 46;
+  const RING_CIRC = 2 * Math.PI * 15;  // small ring, radius 15
 
   let rafHandle = null;
   let lastDisplayed = '';
@@ -604,8 +654,8 @@
     }
     document.getElementById('ringMinutes').textContent = current;
     document.getElementById('ringGoal').textContent = target;
-    const ringCap = document.querySelector('.ring-cap');
-    if (ringCap) ringCap.innerHTML = `of <span id="ringGoal">${target}</span> ${capLabel}`;
+    const unitLbl = document.getElementById('ringUnitLabel');
+    if (unitLbl) unitLbl.textContent = capLabel + ' today';
     const pct = target > 0 ? Math.min(1, current / target) : 0;
     document.getElementById('ringFg').setAttribute('stroke-dashoffset', RING_CIRC * (1 - pct));
     const week = getLast14Days().slice(-7).reduce((a, d) => a + d.minutes, 0);
@@ -742,12 +792,15 @@
     const ctrls = document.getElementById('timerControls');
     const sub = document.getElementById('timerSub');
     const label = document.getElementById('sessionLabel');
+    const extras = document.getElementById('timerExtras');
     if (!s) {
       document.getElementById('timerDisplay').textContent = '00:00';
       sub.textContent = 'Pick a book to start a session.';
       label.textContent = 'Ready when you are';
       ctrls.innerHTML = `<button class="btn btn-primary btn-lg" id="btnStart">Start session</button>`;
       document.getElementById('btnStart').addEventListener('click', onStart);
+      // When idle: offer a manual-entry button for already-read time.
+      if (extras) extras.innerHTML = `<button class="btn btn-ghost btn-sm" id="btnLogManual">+ Log past session</button>`;
     } else {
       const b = findBook(s.bookId);
       sub.textContent = `Reading · ${b.title}`;
@@ -760,7 +813,11 @@
       const ids = ['btnResume','btnPause','btnStop'];
       const handlers = { btnResume: onResume, btnPause: onPause, btnStop: openStopDialog };
       ids.forEach(i => document.getElementById(i)?.addEventListener('click', handlers[i]));
+      // When in session: offer a "Switch book" button.
+      if (extras) extras.innerHTML = `<button class="btn btn-ghost btn-sm" id="btnSwitchBook">↔ Switch book</button>`;
     }
+    document.getElementById('btnLogManual')?.addEventListener('click', openManualDlg);
+    document.getElementById('btnSwitchBook')?.addEventListener('click', switchBookInSession);
   }
   // requestAnimationFrame loop — survives mobile setInterval throttling
   function tickLoop() {
@@ -784,7 +841,16 @@
     try {
       const id = getCurrentBookId();
       const speed = parseFloat(document.getElementById('speedInput').value) || 1;
-      startSession(id, { format: pickedFormat, speed });
+      // Pre-fill with last-known page; let the user confirm or override.
+      const lastPage = getBookProgress(id);
+      const ans = prompt(`Starting page? (Leave as-is to continue from p.${lastPage})`, String(lastPage));
+      if (ans === null) return; // user hit cancel
+      const startPage = Math.max(0, parseInt(ans, 10) || lastPage);
+      // If they typed a higher page than stored progress, sync the progress
+      // forward immediately so the Currently Reading card reflects it.
+      if (startPage > lastPage) setBookProgress(id, startPage);
+      startSession(id, { format: pickedFormat, speed, startPage });
+      refreshCurrentBook();
       renderTimerState();
       startTick();
     } catch (err) {
@@ -814,10 +880,12 @@
     tickLoop(); // one final frame so the display freezes at the paused time
     chosenMood = null;
     document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
-    const id = getCurrentBookId();
-    const lastPage = getBookProgress(id);
-    document.getElementById('startPage').value = lastPage;
-    document.getElementById('endPage').value = lastPage;
+    const s = getSession();
+    const id = s?.bookId || getCurrentBookId();
+    // Prefer the page the user said they started at when they hit Start.
+    const startPage = (s?.startPage != null) ? s.startPage : getBookProgress(id);
+    document.getElementById('startPage').value = startPage;
+    document.getElementById('endPage').value = startPage;
     dlg.classList.add('open');
     setTimeout(() => document.getElementById('endPage').focus(), 50);
   }
@@ -995,7 +1063,7 @@
   }
 
   function renderHistory() {
-    const days = getLast14Days();
+    const days = getLast14Days().slice(-7);  // last 7 days only
     // use ms for sparkline precision so sub-minute sessions still show bars
     const hist14 = Store.get(K.history, []);
     const msByDay = {};
@@ -1003,7 +1071,8 @@
     const sparkleDays = days.map(d => ({ ...d, ms: msByDay[d.date] || 0 }));
     const maxMs = Math.max(60000, ...sparkleDays.map(d => d.ms)); // floor at 1 min
     const svg = document.getElementById('sparkline');
-    const W = 280, H = 90, gap = 2, bw = (W - gap * 13) / 14;
+    const N = days.length;
+    const W = 280, H = 90, gap = 4, bw = (W - gap * (N - 1)) / N;
     const todayKey = new Date().toISOString().slice(0,10);
     let html = '';
     sparkleDays.forEach((d, i) => {
@@ -1221,6 +1290,58 @@
   inviteDlg.addEventListener('click', (e) => { if (e.target === inviteDlg) closeInviteDlg(); });
 
   document.getElementById('readWithFriendBtn').addEventListener('click', openInviteDlg);
+
+  // ---------- manual session entry ----------
+  const manualDlg = document.getElementById('manualDlg');
+  function openManualDlg() {
+    const select = document.getElementById('manualBook');
+    const books = pickerBooks();
+    const currentId = getCurrentBookId();
+    select.innerHTML = books.map(b =>
+      `<option value="${b.id}" ${b.id === currentId ? 'selected' : ''}>${b.title} — ${b.author}</option>`
+    ).join('');
+    document.getElementById('manualMinutes').value = '30';
+    const lastPage = getBookProgress(currentId);
+    document.getElementById('manualStartPage').value = lastPage;
+    document.getElementById('manualEndPage').value = lastPage;
+    document.getElementById('manualDate').value = new Date().toISOString().slice(0, 10);
+    manualDlg.classList.add('open');
+  }
+  document.getElementById('cancelManual').addEventListener('click', () => manualDlg.classList.remove('open'));
+  document.getElementById('confirmManual').addEventListener('click', () => {
+    const bookId = document.getElementById('manualBook').value;
+    const minutes = parseInt(document.getElementById('manualMinutes').value, 10);
+    const startPage = parseInt(document.getElementById('manualStartPage').value, 10) || 0;
+    const endPage = parseInt(document.getElementById('manualEndPage').value, 10) || 0;
+    const date = document.getElementById('manualDate').value || null;
+    const entry = logManualSession({ bookId, minutes, startPage, endPage, date });
+    if (!entry) { alert('Need at least 1 minute and a book.'); return; }
+    manualDlg.classList.remove('open');
+    refreshStats();
+    refreshCurrentBook();
+    renderHistory();
+    renderWeekRecap();
+  });
+
+  // ---------- switch book mid-session ----------
+  function switchBookInSession() {
+    const s = getSession();
+    if (!s) return;
+    const books = pickerBooks().filter(b => b.id !== s.bookId);
+    if (!books.length) { alert('No other books to switch to.'); return; }
+    const opts = books.map((b, i) => `${i + 1}. ${b.title} — ${b.author}`).join('\n');
+    const choice = prompt(`Switch to which book? Pick a number:\n\n${opts}`);
+    const idx = parseInt(choice, 10) - 1;
+    if (!Number.isFinite(idx) || idx < 0 || idx >= books.length) return;
+    const newBook = books[idx];
+    if (!confirm(`Stop logging time for "${findBook(s.bookId).title}" and start fresh on "${newBook.title}"?\n\nThe current session will be saved with the pages you've read so far.`)) return;
+    // Close out the current session as-is (no page change) and start the new one.
+    stopSession({ startPage: getBookProgress(s.bookId), endPage: getBookProgress(s.bookId), mood: null });
+    setCurrentBookId(newBook.id);
+    onStart();
+    renderBookPicker();
+    refreshCurrentBook();
+  }
 
   // ---------- init ----------
   // Resume Reading button — starts a session on the current book (or focuses if one's running)
