@@ -17,8 +17,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css?v=8">
 <style>
-  .lib-hero { margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: stretch; }
-  @media (max-width: 880px) { .lib-hero { grid-template-columns: 1fr; } }
+  .lib-hero { margin-top: 32px; }
 
   .ask-card { background: linear-gradient(180deg, #FFF, var(--primary-tint)); }
   .ask-input-row { display: flex; gap: 8px; margin-top: 14px; }
@@ -166,20 +165,6 @@
       </div>
       <div class="ask-results" id="askResults"></div>
     </div>
-
-    <div class="card card-lg stat-card">
-      <div class="eyebrow">Your reader DNA</div>
-      <h2 style="margin:6px 0 6px;">This week's signal.</h2>
-      <p class="muted" style="margin-bottom:8px;">Used to rank everything below.</p>
-      <div class="stat-grid">
-        <div><div class="num" id="dnaWpm">258</div><div class="lbl">avg WPM</div></div>
-        <div><div class="num" id="dnaPeak">9pm</div><div class="lbl">peak hour</div></div>
-        <div><div class="num" id="dnaGenre">Literary</div><div class="lbl">top genre</div></div>
-        <div><div class="num" id="dnaCompl">82%</div><div class="lbl">completion</div></div>
-        <div><div class="num" id="dnaSess">28m</div><div class="lbl">avg session</div></div>
-        <div><div class="num" id="dnaMood">😌</div><div class="lbl">top mood</div></div>
-      </div>
-    </div>
   </section>
 
   <section class="section-head">
@@ -234,11 +219,9 @@
   </section>
   <div class="chips" id="browseChips">
     <button class="browse-chip" data-filter="all">All</button>
-    <button class="browse-chip" data-filter="commute">☕ Under 4h for you</button>
-    <button class="browse-chip" data-filter="weekend">🛋 One-weekend read</button>
-    <button class="browse-chip" data-filter="marathon">🏔 Marathon (20h+)</button>
-    <button class="browse-chip" data-filter="short">⏱ Quick read (&lt;380p)</button>
-    <button class="browse-chip" data-filter="long">📚 Deep dive (&gt;500p)</button>
+    <button class="browse-chip" data-filter="commute">☕ Quick</button>
+    <button class="browse-chip" data-filter="weekend">🛋 Weekend</button>
+    <button class="browse-chip" data-filter="marathon">🏔 Long</button>
     <button class="browse-chip" data-filter="thriller">🔍 Thriller</button>
     <button class="browse-chip" data-filter="literary">📖 Literary</button>
     <button class="browse-chip" data-filter="scifi">🌌 Sci-fi</button>
@@ -561,23 +544,6 @@
   });
 
   // ---------- DNA from history ----------
-  function renderDNA() {
-    const wpm = Store.get(K.wpm, 258);
-    document.getElementById('dnaWpm').textContent = wpm;
-    const hist = Store.get(K.history, []);
-    if (hist.length) {
-      const total = hist.reduce((a, e) => a + (e.minutes || 0), 0);
-      const avg = Math.round(total / hist.length);
-      document.getElementById('dnaSess').textContent = avg + 'm';
-      const moods = hist.map(e => e.mood).filter(Boolean);
-      if (moods.length) {
-        const top = moods.sort((a,b) =>
-          moods.filter(m => m===a).length - moods.filter(m => m===b).length).pop();
-        document.getElementById('dnaMood').textContent = top;
-      }
-    }
-  }
-
   // ---------- OpenLibrary search ----------
   let searchInFlight = null;
   async function runSearch(query) {
@@ -747,7 +713,6 @@
   renderForYou();
   wireBrowseChips();
   renderShelves();
-  renderDNA();
   applyAIGates();
 </script>
 </body>

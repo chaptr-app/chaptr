@@ -296,7 +296,7 @@
     </div>
   </section>
 
-  <section class="section">
+  <section class="section" id="customChallengesSection" style="display:none;">
     <div class="eyebrow">Custom challenges</div>
     <h2>Set your own targets.</h2>
     <div id="ccGrid"></div>
@@ -305,7 +305,7 @@
     </div>
   </section>
 
-  <section class="section">
+  <section class="section" id="groupChallengesSection" style="display:none;">
     <div class="eyebrow">Group challenges</div>
     <h2>Race a friend, run a book club.</h2>
     <div id="fcList"></div>
@@ -313,6 +313,11 @@
       <button class="btn btn-outline btn-sm" id="newFcBtn">+ New group challenge</button>
     </div>
   </section>
+
+  <div id="addChallengesRow" style="margin-top:20px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+    <button class="btn btn-ghost btn-sm" id="addCustomChallengeBtn">+ Personal challenge</button>
+    <button class="btn btn-ghost btn-sm" id="addGroupChallengeBtn">+ Group challenge</button>
+  </div>
 
   <section class="section">
     <div class="eyebrow">Reading calendar · last 12 months</div>
@@ -774,6 +779,22 @@
     });
   }
 
+  // --- challenge add-row visibility ---
+  // The bottom "+ Personal / + Group" row only appears when at least one
+  // of the two challenge sections is hidden. Once a user has both kinds going,
+  // creation lives inside each section's own "+ New" button.
+  function updateAddRow() {
+    const row = document.getElementById('addChallengesRow');
+    const personalBtn = document.getElementById('addCustomChallengeBtn');
+    const groupBtn = document.getElementById('addGroupChallengeBtn');
+    if (!row) return;
+    const ccHidden = document.getElementById('customChallengesSection').style.display === 'none';
+    const fcHidden = document.getElementById('groupChallengesSection').style.display === 'none';
+    personalBtn.style.display = ccHidden ? '' : 'none';
+    groupBtn.style.display = fcHidden ? '' : 'none';
+    row.style.display = (ccHidden || fcHidden) ? 'flex' : 'none';
+  }
+
   // --- custom challenges (V3) ---
   function fmtChallengeProgress(ch, p) {
     if (ch.type === 'hours') return `${p.current}h of ${ch.target}h`;
@@ -782,10 +803,13 @@
   function renderChallenges() {
     const grid = document.getElementById('ccGrid');
     const list = getCustomChallenges();
-    if (!list.length) {
-      grid.innerHTML = `<div class="cc-empty">No custom challenges yet. Tap below to create one.</div>`;
-      return;
-    }
+    const section = document.getElementById('customChallengesSection');
+    // Hide the entire section when there's nothing yet — the inline +Personal
+    // challenge button at the bottom of Profile handles creation. Section
+    // re-appears once the first challenge exists.
+    if (!list.length) { section.style.display = 'none'; updateAddRow(); return; }
+    section.style.display = '';
+    updateAddRow();
     grid.innerHTML = `<div class="cc-grid">` + list.map(ch => {
       const p = computeChallengeProgress(ch);
       const pct = Math.round(p.pct * 100);
@@ -910,16 +934,21 @@
 
   async function renderFriendChallenges() {
     const wrap = document.getElementById('fcList');
+    const section = document.getElementById('groupChallengesSection');
     if (!Auth.signedIn() || !Sync.enabled()) {
-      wrap.innerHTML = '<div class="fc-empty">Sign in (above) to start a group challenge.</div>';
+      section.style.display = 'none';
+      updateAddRow();
       return;
     }
     const data = await FriendChallenges.list();
     const items = data.items || [];
     if (!items.length) {
-      wrap.innerHTML = '<div class="fc-empty">No group challenges yet — create one below.</div>';
+      section.style.display = 'none';
+      updateAddRow();
       return;
     }
+    section.style.display = '';
+    updateAddRow();
     wrap.innerHTML = items.map((it, i) => `
       <div class="card fc-card" id="fc-card-${it.id}">
         <div class="fc-head">
@@ -1092,6 +1121,18 @@
   wireAuth();
   renderChallenge();
   wireChallenge();
+  // Add-row proxy buttons for empty-state challenge creation.
+  document.getElementById('addCustomChallengeBtn')?.addEventListener('click', () => {
+    document.getElementById('customChallengesSection').style.display = '';
+    updateAddRow();
+    document.getElementById('newChallengeBtn').click();
+  });
+  document.getElementById('addGroupChallengeBtn')?.addEventListener('click', () => {
+    if (!Auth.signedIn()) { alert('Sign in (above) to start a group challenge.'); return; }
+    document.getElementById('groupChallengesSection').style.display = '';
+    updateAddRow();
+    document.getElementById('newFcBtn').click();
+  });
   renderChallenges();
   wireNewChallenge();
   renderFriendChallenges();

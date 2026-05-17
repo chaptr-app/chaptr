@@ -42,15 +42,16 @@
   }
   .timer-sub { text-align: center; color: var(--ink-3); margin-bottom: 22px; }
   .timer-controls { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-  .format-row { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
-  .format-toggle { display: flex; gap: 4px; }
+  .format-row { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .format-toggle { display: flex; gap: 2px; }
   .format-toggle button {
-    padding: 6px 14px; border: 1px solid var(--border); border-radius: var(--r-pill);
-    background: var(--surface); color: var(--ink-2); font: inherit; font-size: .82rem; cursor: pointer;
+    padding: 4px 10px; border: 0; border-radius: var(--r-pill);
+    background: transparent; color: var(--ink-3); font: inherit; font-size: .72rem; cursor: pointer;
+    letter-spacing: .04em;
   }
-  .format-toggle button.active { border-color: var(--primary); background: var(--primary-tint); color: var(--primary); font-weight: 500; }
-  .speed-label { color: var(--ink-3); font-size: .82rem; display: flex; align-items: center; gap: 6px; }
-  .speed-label input { width: 56px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--r-sm); font: inherit; text-align: right; background: var(--bg); color: var(--ink); }
+  .format-toggle button.active { background: var(--surface-2); color: var(--ink-2); }
+  .speed-label { color: var(--ink-3); font-size: .72rem; display: flex; align-items: center; gap: 4px; }
+  .speed-label input { width: 44px; padding: 2px 6px; border: 1px solid var(--border); border-radius: var(--r-sm); font: inherit; font-size: .72rem; text-align: right; background: var(--bg); color: var(--ink); }
 
   /* daily goal ring */
   .ring-wrap { position: relative; width: 110px; height: 110px; }
@@ -370,7 +371,7 @@
     <div class="week-insight" id="weekInsight" style="display:none;"></div>
   </div>
 
-  <div class="card upnext-card">
+  <div class="card upnext-card" id="upnextCard" style="display:none;">
     <div class="row between" style="align-items:center;">
       <div>
         <div class="eyebrow">Up next</div>
@@ -466,10 +467,9 @@
         <div id="coachMoreOut" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--border); font-family:var(--serif); color:var(--ink);"></div>
       </div>
 
-      <div class="card" style="margin-top:18px;">
+      <div class="card" id="moodCard" style="margin-top:18px; display:none;">
         <div class="eyebrow">Mood last 7 sessions</div>
-        <div style="font-size:1.6rem; letter-spacing:6px; margin-top:8px;" id="moodRow">😌 ⚡ 😌 🤯 ⚡ 😌 😴</div>
-        <div class="muted" style="font-size:.85rem; margin-top:6px;">Your reader DNA this week: <em>methodical, peak hours 8–10pm</em>.</div>
+        <div style="font-size:1.6rem; letter-spacing:6px; margin-top:8px;" id="moodRow"></div>
       </div>
     </div>
   </div>
@@ -853,12 +853,14 @@
     const list = document.getElementById('upnextList');
     const picker = document.getElementById('upnextPicker');
     const hint = document.getElementById('upnextHint');
+    const card = document.getElementById('upnextCard');
     const queue = getUpNext();
+    // Only show the card when there's something queued. Picker stays hidden too —
+    // users add via the "+ Up next" button on the shelves page instead.
+    if (!queue.length) { card.style.display = 'none'; return; }
+    card.style.display = '';
     hint.textContent = `${queue.length} / ${MAX_UP_NEXT}`;
-
-    if (!queue.length) {
-      list.innerHTML = `<div class="upnext-empty">Queue is empty. Pick from your Want-to-Read shelf below.</div>`;
-    } else {
+    {
       list.innerHTML = queue.map((id, i) => {
         const b = findBook(id);
         return `<div class="upnext-row">
@@ -913,6 +915,16 @@
         renderUpNext();
       }));
     }
+  }
+
+  // ---------- mood log (last 7 sessions, real data only) ----------
+  function renderMoodCard() {
+    const hist = Store.get(K.history, []);
+    const moods = hist.slice(-7).map(e => e.mood).filter(Boolean);
+    const card = document.getElementById('moodCard');
+    if (!moods.length) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    document.getElementById('moodRow').textContent = moods.join(' ');
   }
 
   // ---------- weekly recap ----------
@@ -1233,6 +1245,7 @@
     renderHistory();
     renderWeekRecap();
     renderUpNext();
+    renderMoodCard();
     wireFormatToggle();
     // Phase 4 — pair reads only show when signed in with the worker configured.
     (async () => {
