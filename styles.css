@@ -194,6 +194,35 @@ button:active, .btn:active, .browse-chip:active, .ask-chip:active, .move-btn:act
   html, body { overscroll-behavior-y: none; }
 }
 
+/* ---------- COLLAPSIBLE SECTIONS (V4 settings polish) ---------- */
+/* A <details>-based disclosure widget styled to match our section headers.
+   The whole eyebrow+h2 block is the clickable summary; a small chevron
+   on the right rotates 180deg when open. */
+.section.collapsible details > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 4px 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.section.collapsible details > summary::-webkit-details-marker { display: none; }
+.section.collapsible details > summary::marker { content: ''; }
+.section.collapsible details > summary > .chev {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  color: var(--ink-3);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-top: 4px;
+  transition: transform 0.2s ease;
+}
+.section.collapsible details[open] > summary > .chev { transform: rotate(180deg); }
+.section.collapsible details > summary:hover .chev { color: var(--primary); }
+.section.collapsible details > summary h2 { margin-bottom: 0; }
+
 /* ---------- SPOILER TAGS (Phase 2B) ---------- */
 .spoiler {
   background: var(--ink);

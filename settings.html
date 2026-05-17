@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=5">
+<link rel="stylesheet" href="styles.css?v=7">
 <style>
   .settings-head { margin-top: 32px; margin-bottom: 12px; }
   .settings-head h1 { margin: 6px 0 0; }
@@ -109,16 +109,6 @@
         <input type="number" id="pagesGoalInput" min="1" max="500" step="1" value="20">
       </div>
       <div class="settings-row">
-        <div style="flex:1; margin-right:16px;">
-          <div class="label">Claude Worker URL</div>
-          <div class="desc">Your Cloudflare Worker endpoint. Powers the real "Ask Claude" in Library.</div>
-          <input type="url" id="workerInput" placeholder="https://chaptr-ask.your-name.workers.dev"
-            style="margin-top:8px; width:100%; padding:8px 12px; border:1px solid var(--border);
-                   border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink);">
-          <div id="workerStatus" style="font-size:.8rem; margin-top:4px; color:var(--ink-3);"></div>
-        </div>
-      </div>
-      <div class="settings-row">
         <div>
           <div class="label">Wipe local data</div>
           <div class="desc danger">Clears sessions, shelves, streak. This cannot be undone.</div>
@@ -139,41 +129,65 @@
     <p class="muted" style="font-size:.78rem; margin-top:6px;">Wipe clears history, WPM, session, and streak data. Your shelves, reviews, and custom shelves are kept.</p>
   </section>
 
-  <section class="section">
-    <div class="eyebrow">Cloud sync</div>
-    <h2>Your data, across devices.</h2>
-    <div class="card" style="margin-top:14px;">
-      <div class="settings-row" style="border-top:0;">
+  <section class="section collapsible">
+    <details>
+      <summary>
         <div>
-          <div class="label">Status</div>
-          <div class="desc" id="syncStatus">Checking…</div>
+          <div class="eyebrow">Cloud sync</div>
+          <h2>Your data, across devices.</h2>
         </div>
-        <span class="pill" id="syncBadge">—</span>
+        <span class="chev">▾</span>
+      </summary>
+      <div class="card" style="margin-top:14px;">
+        <div class="settings-row" style="border-top:0;">
+          <div style="flex:1; margin-right:16px;">
+            <div class="label">Cloudflare Worker URL</div>
+            <div class="desc">Advanced. Required to enable sync — paste your deployed worker URL.</div>
+            <input type="url" id="workerInput" placeholder="https://chaptr-ask.your-name.workers.dev"
+              style="margin-top:8px; width:100%; padding:8px 12px; border:1px solid var(--border);
+                     border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink); font-family:monospace; font-size:.85rem;">
+            <div id="workerStatus" style="font-size:.78rem; margin-top:4px; color:var(--ink-3);"></div>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="label">Status</div>
+            <div class="desc" id="syncStatus">Checking…</div>
+          </div>
+          <span class="pill" id="syncBadge">—</span>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="label">Device ID</div>
+            <div class="desc"><code id="syncDeviceId" style="font-size:.75rem;">—</code></div>
+          </div>
+          <button class="btn btn-outline btn-sm" id="syncCopyId">Copy</button>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="label">Last sync</div>
+            <div class="desc" id="syncWhen">—</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-outline btn-sm" id="syncPullBtn">Pull</button>
+            <button class="btn btn-primary btn-sm" id="syncPushBtn">Push now</button>
+          </div>
+        </div>
       </div>
-      <div class="settings-row">
-        <div>
-          <div class="label">Device ID</div>
-          <div class="desc"><code id="syncDeviceId" style="font-size:.75rem;">—</code></div>
-        </div>
-        <button class="btn btn-outline btn-sm" id="syncCopyId">Copy</button>
-      </div>
-      <div class="settings-row">
-        <div>
-          <div class="label">Last sync</div>
-          <div class="desc" id="syncWhen">—</div>
-        </div>
-        <div style="display:flex; gap:6px;">
-          <button class="btn btn-outline btn-sm" id="syncPullBtn">Pull</button>
-          <button class="btn btn-primary btn-sm" id="syncPushBtn">Push now</button>
-        </div>
-      </div>
-    </div>
+    </details>
   </section>
 
-  <section class="section">
-    <div class="eyebrow">Commerce</div>
-    <h2>Affiliate links.</h2>
-    <div class="card" id="affCard" style="margin-top:14px;"></div>
+  <section class="section collapsible">
+    <details>
+      <summary>
+        <div>
+          <div class="eyebrow">Commerce</div>
+          <h2>Affiliate links.</h2>
+        </div>
+        <span class="chev">▾</span>
+      </summary>
+      <div class="card" id="affCard" style="margin-top:14px;"></div>
+    </details>
   </section>
 
 </main>
