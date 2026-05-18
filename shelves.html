@@ -130,9 +130,42 @@
   .dlg-back.open { display: flex; }
   .dlg-card { background: var(--surface); border-radius: var(--r-lg); padding: 28px; max-width: 480px; width: 100%; box-shadow: var(--shadow-lg); }
   .dlg-card h3 { margin: 0 0 4px; }
-  .star-row { display: flex; gap: 4px; font-size: 1.8rem; cursor: pointer; user-select: none; margin: 14px 0 6px; }
-  .star-row .star { color: var(--surface-2); transition: color .12s; }
-  .star-row .star.on { color: var(--accent); }
+  /* Half-star picker. Each star is two stacked layers (gray base + gold fill
+     clipped by width). Two absolutely-positioned half-width click zones make
+     left/right tappable for .5 / full ratings, like Letterboxd. */
+  .star-row {
+    display: flex; gap: 6px; font-size: 2rem;
+    user-select: none; margin: 14px 0 2px;
+    line-height: 1;
+  }
+  .star {
+    position: relative; display: inline-block; width: 1em; height: 1em;
+    cursor: pointer;
+  }
+  .star .base, .star .fill {
+    position: absolute; top: 0; left: 0; line-height: 1;
+    pointer-events: none;
+  }
+  .star .base { color: var(--surface-2); }
+  .star .fill {
+    color: var(--accent);
+    overflow: hidden; white-space: nowrap; width: 0%;
+    transition: width .12s;
+  }
+  .star .half-left,
+  .star .half-right {
+    position: absolute; top: -4px; bottom: -4px; width: 50%;
+    cursor: pointer; z-index: 2;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .star .half-left  { left: 0; }
+  .star .half-right { right: 0; }
+  /* Hover preview using :has — paint the current star left/full on hover */
+  .star:has(.half-left:hover)  .fill { width: 50%  !important; opacity: .55; }
+  .star:has(.half-right:hover) .fill { width: 100% !important; opacity: .55; }
+  .star-hint {
+    font-size: .72rem; color: var(--ink-3); margin-top: 4px;
+  }
   .review-text { width: 100%; min-height: 90px; padding: 12px 14px; border: 1px solid var(--border);
     border-radius: var(--r-sm); font: inherit; background: var(--bg); color: var(--ink); resize: vertical; }
   .review-text:focus { outline: 0; border-color: var(--primary); background: var(--surface); }
@@ -332,13 +365,34 @@
     <h3 id="reviewBookTitle">Book</h3>
     <div class="muted" id="reviewBookAuthor" style="font-size:.9rem;"></div>
     <div class="star-row" id="starRow">
-      <span class="star" data-star="1">★</span>
-      <span class="star" data-star="2">★</span>
-      <span class="star" data-star="3">★</span>
-      <span class="star" data-star="4">★</span>
-      <span class="star" data-star="5">★</span>
+      <span class="star" data-star="1">
+        <span class="base">★</span><span class="fill">★</span>
+        <span class="half-left" data-rating="0.5" aria-label="Half star"></span>
+        <span class="half-right" data-rating="1" aria-label="1 star"></span>
+      </span>
+      <span class="star" data-star="2">
+        <span class="base">★</span><span class="fill">★</span>
+        <span class="half-left" data-rating="1.5" aria-label="1.5 stars"></span>
+        <span class="half-right" data-rating="2" aria-label="2 stars"></span>
+      </span>
+      <span class="star" data-star="3">
+        <span class="base">★</span><span class="fill">★</span>
+        <span class="half-left" data-rating="2.5" aria-label="2.5 stars"></span>
+        <span class="half-right" data-rating="3" aria-label="3 stars"></span>
+      </span>
+      <span class="star" data-star="4">
+        <span class="base">★</span><span class="fill">★</span>
+        <span class="half-left" data-rating="3.5" aria-label="3.5 stars"></span>
+        <span class="half-right" data-rating="4" aria-label="4 stars"></span>
+      </span>
+      <span class="star" data-star="5">
+        <span class="base">★</span><span class="fill">★</span>
+        <span class="half-left" data-rating="4.5" aria-label="4.5 stars"></span>
+        <span class="half-right" data-rating="5" aria-label="5 stars"></span>
+      </span>
     </div>
-    <div class="muted" id="ratingLabel" style="font-size:.82rem; margin-bottom:10px;">Tap a star to rate</div>
+    <div class="star-hint">Tip: tap the <strong>left half</strong> of a star for a ½ rating.</div>
+    <div class="muted" id="ratingLabel" style="font-size:.82rem; margin:6px 0 10px;">Tap a star to rate</div>
     <textarea class="review-text" id="reviewText" placeholder="A line or two — what hit, what didn't?"></textarea>
     <div class="muted" style="font-size:.75rem; margin-top:4px;">Wrap reveals in <code>||double pipes||</code> to mark them as spoilers.</div>
     <div style="margin-top:12px;">
@@ -367,7 +421,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=48"></script>
+<script src="app.js?v=49"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
@@ -723,14 +777,33 @@
   document.querySelectorAll('#reviewVisibility button').forEach(btn => {
     btn.addEventListener('click', () => { reviewVisibility = btn.dataset.vis; paintVisibility(); });
   });
-  const ratingLabels = ['', 'Hated it', 'Meh', 'It was OK', 'Really liked it', 'Loved it'];
+  const ratingLabels = {
+    0:   'Tap a star to rate',
+    0.5: '½ ★ — Barely there',
+    1:   '★ — Hated it',
+    1.5: '★½ — Eh',
+    2:   '★★ — Meh',
+    2.5: '★★½ — Mixed',
+    3:   '★★★ — It was OK',
+    3.5: '★★★½ — Pretty good',
+    4:   '★★★★ — Really liked it',
+    4.5: '★★★★½ — Loved it',
+    5:   '★★★★★ — A new favorite',
+  };
 
   function paintStars() {
+    // Each star's .fill is clipped by width: 100% (full), 50% (half), or 0% (off)
     document.querySelectorAll('#starRow .star').forEach(s => {
-      s.classList.toggle('on', parseInt(s.dataset.star, 10) <= reviewRating);
+      const n = parseInt(s.dataset.star, 10);
+      const fillAmount = Math.max(0, Math.min(1, reviewRating - (n - 1))); // 0..1
+      const fillEl = s.querySelector('.fill');
+      if (fillEl) {
+        fillEl.style.width = (fillAmount * 100) + '%';
+        fillEl.style.opacity = '1';
+      }
     });
     document.getElementById('ratingLabel').textContent =
-      reviewRating ? ratingLabels[reviewRating] : 'Tap a star to rate';
+      ratingLabels[reviewRating] || 'Tap a star to rate';
   }
 
   function openReviewDlg(bookId) {
@@ -750,10 +823,13 @@
   }
   function closeReviewDlg() { reviewDlg.classList.remove('open'); reviewBookId = null; }
 
-  document.querySelectorAll('#starRow .star').forEach(s => {
-    s.addEventListener('click', () => {
-      const n = parseInt(s.dataset.star, 10);
-      reviewRating = (reviewRating === n) ? 0 : n; // tap same star to clear
+  // Wire the half-zones. Tap left half = N - 0.5, right half = N.
+  // Tapping the same zone again clears the rating back to 0.
+  document.querySelectorAll('#starRow .half-left, #starRow .half-right').forEach(zone => {
+    zone.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = parseFloat(zone.dataset.rating);
+      reviewRating = (reviewRating === r) ? 0 : r;
       paintStars();
     });
   });
