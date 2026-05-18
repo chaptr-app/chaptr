@@ -199,8 +199,13 @@
   .mr-cal-cell.outside { background: transparent; border-color: transparent; }
   .mr-cal-cell.outside .day-num { color: var(--surface-2); }
   .mr-cell-cover {
-    flex: 1; background-size: cover !important; background-position: center !important;
-    border-radius: 3px; box-shadow: var(--shadow-sm);
+    flex: 1;
+    /* Show the entire cover (not cropped) — overrides the global
+       .cover { background-size: cover !important } rule. */
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    border-radius: 3px;
     position: relative; cursor: pointer; min-height: 0;
   }
   .mr-cell-cover.extra::after {
@@ -732,7 +737,7 @@
   </div>
 </div>
 
-<script src="app.js?v=41"></script>
+<script src="app.js?v=42"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -1353,7 +1358,67 @@
     });
   }
   function wireMonthReview() {
-    document.getElementById('mrPrintBtn').addEventListener('click', () => window.print());
+    document.getElementById('mrPrintBtn').addEventListener('click', () => {
+      // Open the monthly review by itself in a popup, then print. Keeps
+      // headers/footers/other cards off the printout.
+      const card = document.getElementById('monthReviewCard');
+      if (!card) return;
+      const monthTitle = document.getElementById('monthRevTitle')?.textContent || 'Monthly review';
+      // Clone the card and strip the footer (print button itself shouldn't print)
+      const clone = card.cloneNode(true);
+      clone.querySelector('.mr-footer')?.remove();
+
+      const cssRules = `
+        @page { margin: 18mm; }
+        /* Ensure cover background images actually print, not just on screen */
+        *, *::before, *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        body { font-family: 'Inter', sans-serif; color: #222; margin: 0; padding: 0; background: #FFF; }
+        .brand { font-family: 'Fraunces', serif; font-size: 1.4rem; margin: 0 0 4px; color: #2D4A3E; }
+        .when  { font-size: .85rem; color: #777; margin: 0 0 18px; }
+        .month-review { box-shadow: none; border: 0; padding: 0; }
+        .eyebrow { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: #888; font-weight: 600; }
+        h3 { font-family: 'Fraunces', serif; margin: 6px 0 0; font-size: 1.4rem; color: #222; }
+        .row.between { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+        .muted { color: #777; font-size: .85rem; }
+        .mr-cal-grid-head, .mr-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+        .mr-cal-grid-head { margin-top: 12px; margin-bottom: 4px; }
+        .dow { font-size: .65rem; letter-spacing: .08em; text-transform: uppercase; color: #888; font-weight: 600; text-align: center; padding: 4px 0; }
+        .mr-cal-cell {
+          aspect-ratio: 1; background: #FAF7F2; border: 1px solid #E8E2D6;
+          border-radius: 6px; position: relative; overflow: hidden;
+          padding: 16px 4px 4px; display: flex; align-items: stretch; justify-content: center;
+        }
+        .mr-cal-cell.outside { background: transparent; border-color: transparent; }
+        .mr-cal-cell.today { border-color: #C97B5C; border-width: 2px; padding-top: 15px; padding-left: 3px; padding-right: 3px; padding-bottom: 3px; }
+        .mr-cal-cell .day-num { position: absolute; top: 4px; left: 0; right: 0; text-align: center; font-size: .68rem; color: #888; }
+        .mr-cell-cover {
+          flex: 1; background-size: contain !important; background-repeat: no-repeat !important;
+          background-position: center !important; border-radius: 3px; min-height: 0;
+        }
+        .mr-cell-cover.extra::after {
+          content: '+' attr(data-extra); position: absolute; bottom: 2px; right: 2px;
+          background: rgba(0,0,0,.65); color: #FFF; font-size: .58rem; padding: 1px 4px; border-radius: 6px;
+        }
+        .mr-empty { text-align: center; padding: 18px 8px; margin-top: 12px; color: #888; font-size: .88rem; border: 1px dashed #E8E2D6; border-radius: 6px; }
+      `;
+
+      const html = `<!doctype html><html><head><meta charset="utf-8">
+        <title>${monthTitle} — Chaptr</title>
+        <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+        <style>${cssRules}</style>
+        </head><body>
+          <div class="brand">Chaptr</div>
+          <div class="when">Monthly review — printed ${new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+          ${clone.outerHTML}
+          <script>window.addEventListener('load', () => setTimeout(() => window.print(), 350));<\/script>
+        </body></html>`;
+
+      const w = window.open('', '_blank', 'width=820,height=1000');
+      if (!w) { alert('Allow pop-ups for Chaptr to print the monthly review.'); return; }
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+    });
   }
 
   // ---------- reading buddies (Phase 4) ----------
