@@ -237,6 +237,27 @@
     border-radius: var(--r-sm); font: inherit; text-align: right;
   }
   .danger { color: var(--danger); }
+
+  /* Apple-branded sign-in button — official guidance is black bg, white text */
+  .btn-apple {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 11px 18px; border-radius: var(--r-pill);
+    background: #000; color: #FFF !important; border: 1px solid #000;
+    font: inherit; font-weight: 500; font-size: .95rem;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: opacity .12s;
+  }
+  .btn-apple:hover { opacity: .85; }
+  .btn-apple:disabled { opacity: .5; cursor: not-allowed; }
+
+  .auth-divider {
+    display: flex; align-items: center; gap: 10px;
+    margin: 4px 0; color: var(--ink-3); font-size: .72rem;
+    letter-spacing: .08em; text-transform: uppercase; font-weight: 600;
+  }
+  .auth-divider::before, .auth-divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
 </style>
 </head>
 <body>
@@ -267,9 +288,16 @@
     <div class="card" style="margin-top:14px;" id="accountCard">
       <div id="accountSignedOut" style="display:none;">
         <p class="muted" style="margin:0 0 12px;">Not signed in. Your data is linked to this browser only.</p>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button class="btn btn-primary" id="authSignInBtn">Sign in</button>
-          <button class="btn btn-outline" id="authSignUpBtn">Create account</button>
+        <button class="btn btn-apple" id="authAppleBtn" style="width:100%; margin-bottom:10px;" aria-label="Continue with Apple">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="vertical-align:-3px; margin-right:8px;">
+            <path d="M17.05 12.04c-.03-2.95 2.41-4.37 2.52-4.43-1.37-2-3.51-2.27-4.27-2.3-1.82-.18-3.55 1.07-4.47 1.07-.94 0-2.36-1.05-3.88-1.02-2 .03-3.85 1.16-4.88 2.95-2.08 3.61-.53 8.95 1.5 11.87.99 1.43 2.17 3.03 3.71 2.97 1.49-.06 2.05-.96 3.86-.96 1.8 0 2.31.96 3.88.93 1.6-.03 2.62-1.45 3.6-2.89 1.13-1.66 1.6-3.27 1.62-3.36-.04-.02-3.11-1.19-3.14-4.72zM14.03 3.94c.82-1 1.37-2.39 1.22-3.78-1.18.05-2.62.79-3.46 1.78-.76.88-1.42 2.29-1.24 3.65 1.32.1 2.66-.67 3.48-1.65z"/>
+          </svg>
+          Continue with Apple
+        </button>
+        <div class="auth-divider" aria-hidden="true"><span>or</span></div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+          <button class="btn btn-primary" id="authSignInBtn" style="flex:1;">Sign in</button>
+          <button class="btn btn-outline" id="authSignUpBtn" style="flex:1;">Create account</button>
         </div>
       </div>
       <div id="accountSignedIn" style="display:none;">
@@ -512,7 +540,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=43"></script>
+<script src="app.js?v=44"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
@@ -755,6 +783,18 @@
     document.getElementById('followingCount').textContent = follows.following?.length || 0;
   }
   function wireAuth() {
+    document.getElementById('authAppleBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('authAppleBtn');
+      btn.disabled = true;
+      try { await Auth.signInWithOAuth('oauth_apple'); }
+      catch (e) {
+        const err = document.getElementById('authError');
+        err.style.display = '';
+        err.textContent = 'Apple sign-in failed: ' + (e.message || 'unknown') +
+          ' (make sure Sign in with Apple is enabled in the Clerk dashboard).';
+        btn.disabled = false;
+      }
+    });
     document.getElementById('authSignInBtn').addEventListener('click', async () => {
       try { await Auth.openSignIn(); }
       catch (e) {

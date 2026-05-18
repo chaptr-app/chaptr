@@ -167,6 +167,36 @@ const Auth = {
     await this.load();
     if (this._clerk?.openSignUp) this._clerk.openSignUp(this._redirectOpts());
   },
+  // One-tap OAuth via Clerk. Strategy IDs follow Clerk's naming
+  // (oauth_apple, oauth_google, oauth_github, etc.). For Apple to work,
+  // "Sign in with Apple" must also be enabled + configured in the
+  // Clerk dashboard for this instance.
+  async signInWithOAuth(strategy) {
+    await this.load();
+    if (!this._clerk?.client) throw new Error('Auth not ready');
+    const here = window.location.href;
+    const opts = {
+      strategy,
+      redirectUrl: here,           // where Clerk lands after the IdP redirect
+      redirectUrlComplete: here,   // where Clerk lands after the whole flow
+    };
+    // Try sign-in first; if no account exists yet, fall back to sign-up so
+    // a single button covers both new and returning users.
+    try {
+      const signIn = this._clerk.client.signIn;
+      if (signIn?.authenticateWithRedirect) {
+        await signIn.authenticateWithRedirect(opts);
+        return;
+      }
+    } catch (e) {
+      // Some Clerk SDK versions throw if the user isn't yet in the user table;
+      // fall through to signUp.
+    }
+    const signUp = this._clerk.client.signUp;
+    if (signUp?.authenticateWithRedirect) {
+      await signUp.authenticateWithRedirect(opts);
+    }
+  },
   async signOut() {
     if (this._clerk?.signOut) await this._clerk.signOut();
   },
