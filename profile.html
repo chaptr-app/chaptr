@@ -39,17 +39,52 @@
   .section { margin-top: 36px; }
   .section h2 { margin-bottom: 4px; }
 
-  .cal-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 8px 4px 12px; }
-  .cal-svg { display: block; user-select: none; }
-  .cal-cell { transition: stroke .15s; }
-  .cal-cell:hover { stroke: var(--ink); stroke-width: 1; }
-  .cal-month, .cal-day { fill: var(--ink-3); font-size: 10px; font-family: var(--sans); }
-  .cal-legend {
-    display: flex; align-items: center; gap: 8px; justify-content: flex-end;
-    margin-top: 8px; color: var(--ink-3); font-size: .78rem;
+  /* clean monthly reading calendar with prev/next navigation */
+  .cal-nav {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px; gap: 12px;
   }
-  .cal-legend .swatches { display: flex; gap: 3px; }
-  .cal-legend .sw { width: 12px; height: 12px; border-radius: 2px; }
+  .cal-nav h3 {
+    margin: 0; font-family: var(--serif); font-size: 1.2rem; color: var(--ink);
+    text-align: center; flex: 1;
+  }
+  .cal-nav-btn {
+    width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--ink-2); cursor: pointer; font-size: 1rem;
+    display: grid; place-items: center; transition: all .12s;
+  }
+  .cal-nav-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .cal-nav-btn:disabled { opacity: .3; cursor: not-allowed; }
+  .cal-dow-row {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 6px;
+  }
+  .cal-dow-row .dow {
+    font-size: .65rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600; text-align: center; padding: 2px 0;
+  }
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+  }
+  .cal-day-cell {
+    aspect-ratio: 1; border-radius: 6px; position: relative;
+    border: 1px solid var(--border); background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .82rem; color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .cal-day-cell.outside { background: transparent; border-color: transparent; color: var(--surface-2); }
+  .cal-day-cell.today { border-color: var(--accent); border-width: 2px; font-weight: 600; }
+  .cal-day-cell.lvl-1 { background: hsl(150, 30%, 92%); }
+  .cal-day-cell.lvl-2 { background: hsl(150, 32%, 78%); }
+  .cal-day-cell.lvl-3 { background: hsl(150, 38%, 60%); color: #FFF; }
+  .cal-day-cell.lvl-4 { background: hsl(150, 42%, 38%); color: #FFF; }
+  .cal-day-cell.lvl-3.today, .cal-day-cell.lvl-4.today { border-color: var(--accent); }
+  .cal-legend {
+    display: flex; align-items: center; gap: 8px; justify-content: center;
+    margin-top: 14px; color: var(--ink-3); font-size: .72rem;
+  }
+  .cal-legend .swatches { display: flex; gap: 4px; }
+  .cal-legend .sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--border); }
   .cal-stats {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px;
   }
@@ -346,20 +381,24 @@
   </div>
 
   <section class="section">
-    <div class="eyebrow">Reading calendar · last 12 months</div>
+    <div class="eyebrow">Reading calendar</div>
     <h2>Every day you opened a book.</h2>
     <div class="card" style="margin-top:14px;">
-      <div class="cal-wrap">
-        <svg id="calSvg" class="cal-svg" aria-label="Year reading heatmap"></svg>
+      <div class="cal-nav">
+        <button class="cal-nav-btn" id="calPrevBtn" aria-label="Previous month">‹</button>
+        <h3 id="calMonthTitle">Month</h3>
+        <button class="cal-nav-btn" id="calNextBtn" aria-label="Next month">›</button>
       </div>
+      <div class="cal-dow-row" id="calDowRow"></div>
+      <div class="cal-grid" id="calGrid"></div>
       <div class="cal-legend">
         <span>Less</span>
         <div class="swatches" id="calSwatches"></div>
         <span>More</span>
       </div>
       <div class="cal-stats">
-        <div class="cs"><div class="v" id="calActiveDays">0</div><div class="l">Active days (last 12 mo)</div></div>
-        <div class="cs"><div class="v" id="calTotalHours">0h</div><div class="l">Total time read</div></div>
+        <div class="cs"><div class="v" id="calActiveDays">0</div><div class="l">Active days this month</div></div>
+        <div class="cs"><div class="v" id="calTotalHours">0h</div><div class="l">Time read</div></div>
         <div class="cs"><div class="v" id="calLongestRun">0</div><div class="l">Longest streak (days)</div></div>
       </div>
     </div>
@@ -473,7 +512,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=40"></script>
+<script src="app.js?v=41"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
@@ -483,7 +522,10 @@
           getCustomChallenges, createCustomChallenge, deleteCustomChallenge, computeChallengeProgress,
           Store, K } = window.Chaptr;
 
-  const LEVEL_COLORS = ['#F4EFE6', 'hsl(150,30%,80%)', 'hsl(150,32%,60%)', 'hsl(150,38%,45%)', '#2D4A3E'];
+  const LEVEL_COLORS = ['#F4EFE6', 'hsl(150,30%,92%)', 'hsl(150,32%,78%)', 'hsl(150,38%,60%)', 'hsl(150,42%,38%)'];
+  const DOW_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  // Calendar view state — which month the user is browsing.
+  let calCursor = (() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; })();
 
   // --- top stats ---
   function renderStats() {
@@ -574,74 +616,83 @@
     ).join('');
   }
 
-  // --- reading calendar (GitHub-style heatmap) ---
+  // --- reading calendar — single-month grid with prev/next navigation ---
   function renderCalendar() {
-    const days = getYearActivity();
-    // Constants
-    const cell = 12, gap = 2, leftPad = 28, topPad = 18;
-    const weeks = Math.ceil(days.length / 7);
-    const width = leftPad + weeks * (cell + gap);
-    const height = topPad + 7 * (cell + gap) + 18;
-    const svg = document.getElementById('calSvg');
-    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    svg.setAttribute('width', width);
-    svg.setAttribute('height', height);
+    const { year, month } = calCursor;
+    const monthName = new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    document.getElementById('calMonthTitle').textContent = monthName;
 
-    // Build cells grouped by week. days[0] is a Sunday, so week index = floor(i/7).
-    let cellsHtml = '';
-    let monthsHtml = '';
-    let lastMonth = -1;
-    days.forEach((d, i) => {
-      const week = Math.floor(i / 7);
-      const x = leftPad + week * (cell + gap);
-      const y = topPad + d.dow * (cell + gap);
-      const level = activityLevel(d.minutes);
-      const fill = LEVEL_COLORS[level];
-      const dateLabel = new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-      const tip = d.minutes > 0 ? `${dateLabel} · ${d.minutes}m` : `${dateLabel} · no reading`;
-      cellsHtml += `<rect class="cal-cell" x="${x}" y="${y}" width="${cell}" height="${cell}" rx="2" fill="${fill}"><title>${tip}</title></rect>`;
-      // Month label: place on the first Sunday of each month
-      if (d.dow === 0) {
-        const m = new Date(d.date + 'T00:00:00').getMonth();
-        if (m !== lastMonth) {
-          lastMonth = m;
-          const monthName = new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short' });
-          monthsHtml += `<text class="cal-month" x="${x}" y="${topPad - 4}">${monthName}</text>`;
-        }
-      }
-    });
-    // Day labels (Mon, Wed, Fri)
-    const dayLabels = [
-      { dow: 1, label: 'Mon' },
-      { dow: 3, label: 'Wed' },
-      { dow: 5, label: 'Fri' },
-    ];
-    const labelsHtml = dayLabels.map(d => {
-      const y = topPad + d.dow * (cell + gap) + cell - 2;
-      return `<text class="cal-day" x="0" y="${y}">${d.label}</text>`;
-    }).join('');
+    // Build minute map from history for fast lookup
+    const hist = Store.get(K.history, []);
+    const minsByDate = {};
+    for (const e of hist) minsByDate[e.date] = (minsByDate[e.date] || 0) + (e.minutes || 0);
 
-    svg.innerHTML = monthsHtml + labelsHtml + cellsHtml;
+    // Day-of-week header row
+    document.getElementById('calDowRow').innerHTML =
+      DOW_INITIALS.map(d => `<div class="dow">${d}</div>`).join('');
+
+    // Build the month grid (Sun-start, padded with outside cells before day 1)
+    const firstDow = new Date(year, month, 1).getDay();
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const todayKey = new Date().toISOString().slice(0, 10);
+
+    const cells = [];
+    for (let i = 0; i < firstDow; i++) cells.push(`<div class="cal-day-cell outside"></div>`);
+    for (let d = 1; d <= lastDay; d++) {
+      const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const mins = minsByDate[dateKey] || 0;
+      const level = activityLevel(mins);
+      const cls = ['cal-day-cell', `lvl-${level}`, dateKey === todayKey ? 'today' : ''].filter(Boolean).join(' ');
+      const tip = mins > 0 ? `${monthName.split(' ')[0]} ${d} · ${mins}m read` : `${monthName.split(' ')[0]} ${d} · no reading`;
+      cells.push(`<div class="${cls}" title="${tip}">${d}</div>`);
+    }
+    document.getElementById('calGrid').innerHTML = cells.join('');
 
     // Legend swatches
     document.getElementById('calSwatches').innerHTML =
       LEVEL_COLORS.map(c => `<span class="sw" style="background:${c};"></span>`).join('');
 
-    // Stats
-    const activeDays = days.filter(d => d.minutes > 0).length;
-    const totalMs = days.reduce((a, d) => a + d.ms, 0);
+    // Next button disabled if we're on the current month or beyond
+    const now = new Date();
+    const onCurrent = (year === now.getFullYear() && month === now.getMonth());
+    document.getElementById('calNextBtn').disabled = onCurrent;
+
+    // Stats for the visible month
+    let activeDays = 0, totalMs = 0;
+    for (let d = 1; d <= lastDay; d++) {
+      const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const mins = minsByDate[dateKey] || 0;
+      if (mins > 0) activeDays++;
+      totalMs += mins * 60000;
+    }
     const totalH = Math.floor(totalMs / 3600000);
     const totalM = Math.round((totalMs % 3600000) / 60000);
     document.getElementById('calActiveDays').textContent = activeDays;
     document.getElementById('calTotalHours').textContent = totalH > 0 ? `${totalH}h ${totalM}m` : `${totalM}m`;
 
-    // Longest streak (>= 1 minute counts as active)
+    // Longest reading streak across the user's full history (not just this month).
+    const days = getYearActivity();
     let longest = 0, run = 0;
-    for (const d of days) {
-      if (d.minutes > 0) { run += 1; if (run > longest) longest = run; }
+    for (const dayEntry of days) {
+      if (dayEntry.minutes > 0) { run++; if (run > longest) longest = run; }
       else run = 0;
     }
     document.getElementById('calLongestRun').textContent = longest;
+  }
+
+  function wireCalendarNav() {
+    document.getElementById('calPrevBtn').addEventListener('click', () => {
+      calCursor.month -= 1;
+      if (calCursor.month < 0) { calCursor.month = 11; calCursor.year -= 1; }
+      renderCalendar();
+    });
+    document.getElementById('calNextBtn').addEventListener('click', () => {
+      const now = new Date();
+      if (calCursor.year === now.getFullYear() && calCursor.month === now.getMonth()) return;
+      calCursor.month += 1;
+      if (calCursor.month > 11) { calCursor.month = 0; calCursor.year += 1; }
+      renderCalendar();
+    });
   }
 
   // --- account (V2 Phase 1B — Clerk) ---
@@ -1170,6 +1221,7 @@
   if (getAISettings().readerPersona) renderPersonaClaude();
   else { document.getElementById('personaText').textContent = 'Reader Persona is off.'; document.getElementById('personaSignals').textContent = ''; }
   renderCalendar();
+  wireCalendarNav();
   renderGenreBars();
   renderMoods();
   renderAISettings();

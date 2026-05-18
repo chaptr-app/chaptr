@@ -184,27 +184,31 @@
   }
   .mr-cal-cell {
     aspect-ratio: 1; background: var(--bg); border: 1px solid var(--border);
-    border-radius: 5px; position: relative; overflow: hidden;
-    display: flex; align-items: stretch; justify-content: stretch;
+    border-radius: 6px; position: relative; overflow: hidden;
+    padding: 16px 4px 4px;  /* room for day number on top + breathing room around cover */
+    display: flex; align-items: stretch; justify-content: center;
   }
   .mr-cal-cell .day-num {
-    position: absolute; top: 3px; left: 5px;
-    font-size: .65rem; color: var(--ink-3); font-variant-numeric: tabular-nums;
-    z-index: 2; text-shadow: 0 0 3px var(--surface);
+    position: absolute; top: 4px; left: 0; right: 0;
+    text-align: center;
+    font-size: .68rem; color: var(--ink-3); font-variant-numeric: tabular-nums;
+    z-index: 2; line-height: 1;
   }
-  .mr-cal-cell.today { border-color: var(--accent); border-width: 2px; }
+  .mr-cal-cell.today { border-color: var(--accent); border-width: 2px; padding-top: 15px; padding-left: 3px; padding-right: 3px; padding-bottom: 3px; }
+  .mr-cal-cell.today .day-num { color: var(--accent); font-weight: 600; }
   .mr-cal-cell.outside { background: transparent; border-color: transparent; }
   .mr-cal-cell.outside .day-num { color: var(--surface-2); }
-  .mr-cal-cell.has-book .day-num { color: #FFF; text-shadow: 0 0 4px rgba(0,0,0,.6); }
   .mr-cell-cover {
     flex: 1; background-size: cover !important; background-position: center !important;
-    border-radius: 4px; position: relative; cursor: pointer;
+    border-radius: 3px; box-shadow: var(--shadow-sm);
+    position: relative; cursor: pointer; min-height: 0;
   }
   .mr-cell-cover.extra::after {
     content: '+' attr(data-extra);
-    position: absolute; bottom: 3px; right: 4px;
-    background: rgba(0,0,0,.55); color: #FFF; font-size: .62rem;
-    font-weight: 600; padding: 1px 5px; border-radius: 8px;
+    position: absolute; bottom: 2px; right: 2px;
+    background: rgba(0,0,0,.65); color: #FFF; font-size: .58rem;
+    font-weight: 600; padding: 1px 4px; border-radius: 6px;
+    line-height: 1.2;
   }
   .mr-empty {
     text-align: center; padding: 18px 8px; margin-top: 12px;
@@ -728,7 +732,7 @@
   </div>
 </div>
 
-<script src="app.js?v=40"></script>
+<script src="app.js?v=41"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -860,31 +864,31 @@
   }
 
   // ---------- book picker ----------
+  // Only books the user has explicitly chosen — Reading first, then Want-to-read.
+  // Keeps the picker focused so they don't have to scan the whole catalog.
   function pickerBooks() {
     const shelves = getShelves();
-    const customMap = getCustomBooks();
-    // reading shelf first (seed + custom), then want-to-read, then remaining catalog
     const seen = new Set();
     const ordered = [];
-    for (const id of [...shelves.reading, ...shelves.wantToRead]) {
+    for (const id of [...(shelves.reading || []), ...(shelves.wantToRead || [])]) {
       if (seen.has(id)) continue;
       seen.add(id);
-      ordered.push(findBook(id));
+      const b = findBook(id);
+      if (b) ordered.push(b);
     }
-    for (const b of CATALOG) {
-      if (!seen.has(b.id)) { seen.add(b.id); ordered.push(b); }
-    }
-    for (const b of Object.values(customMap)) {
-      if (!seen.has(b.id)) { seen.add(b.id); ordered.push(b); }
-    }
-    return ordered.slice(0, 8);
+    return ordered;
   }
 
   function renderBookPicker() {
     const el = document.getElementById('bookPicker');
     const currentId = getCurrentBookId();
+    const books = pickerBooks();
     el.innerHTML = '';
-    for (const b of pickerBooks()) {
+    if (!books.length) {
+      el.innerHTML = `<div class="muted" style="grid-column:1/-1; padding:18px 8px; text-align:center; border:1px dashed var(--border); border-radius:var(--r-sm);">No books on your <em>Reading</em> or <em>Want to read</em> shelves yet. <a href="library.html">Browse the Library →</a></div>`;
+      return;
+    }
+    for (const b of books) {
       const btn = document.createElement('button');
       btn.className = 'book-pick' + (b.id === currentId ? ' selected' : '');
       btn.innerHTML = `
