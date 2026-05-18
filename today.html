@@ -486,23 +486,35 @@
 
   <div class="card cc-hero" id="currentBookCard">
     <div class="eyebrow">Currently reading</div>
-    <div class="book-card" style="margin-top:10px;">
-      <div class="cover" id="ccCover"></div>
-      <div class="book-meta">
-        <div class="title"><a id="ccTitle" href="#" style="color:inherit; text-decoration:none;"></a></div>
-        <div class="author" id="ccAuthor"></div>
-        <div class="progress"><span id="ccProgress" style="width:38%;"></span></div>
-        <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:.78rem; color:var(--ink-3);">
-          <span><span id="ccPct">38</span>% · p.<span id="ccPage">120</span></span>
-          <span id="ccTimeLeft">~3h 20m left</span>
+    <!-- Filled state — shown once the user has a current book picked -->
+    <div id="ccFilled" style="display:none;">
+      <div class="book-card" style="margin-top:10px;">
+        <div class="cover" id="ccCover"></div>
+        <div class="book-meta">
+          <div class="title"><a id="ccTitle" href="#" style="color:inherit; text-decoration:none;"></a></div>
+          <div class="author" id="ccAuthor"></div>
+          <div class="progress"><span id="ccProgress" style="width:38%;"></span></div>
+          <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:.78rem; color:var(--ink-3);">
+            <span><span id="ccPct">38</span>% · p.<span id="ccPage">120</span></span>
+            <span id="ccTimeLeft">~3h 20m left</span>
+          </div>
+          <div class="cc-last" id="ccLast" style="display:none;"></div>
         </div>
-        <div class="cc-last" id="ccLast" style="display:none;"></div>
+      </div>
+      <div class="resume-row">
+        <button class="btn btn-primary" id="btnResumeReading" style="width:100%;">Resume reading</button>
+      </div>
+      <button class="btn btn-outline btn-sm" id="readWithFriendBtn" style="margin-top:10px; width:100%; display:none;">+ Read with a friend</button>
+    </div>
+    <!-- Empty state — new users land here, prompted to pick a book first -->
+    <div id="ccEmpty" style="display:none; padding:14px 4px 6px;">
+      <h3 style="margin:6px 0 4px; font-family:var(--serif);">Pick a book to start.</h3>
+      <p class="muted" style="margin:0 0 14px; font-size:.92rem;">Add something to your <em>Reading</em> or <em>Want to read</em> shelf, then choose it below to begin a session.</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="library.html" class="btn btn-primary" style="flex:1; text-align:center;">Browse the Library</a>
+        <a href="shelves.html" class="btn btn-outline" style="flex:1; text-align:center;">Open Shelves</a>
       </div>
     </div>
-    <div class="resume-row">
-      <button class="btn btn-primary" id="btnResumeReading" style="width:100%;">Resume reading</button>
-    </div>
-    <button class="btn btn-outline btn-sm" id="readWithFriendBtn" style="margin-top:10px; width:100%; display:none;">+ Read with a friend</button>
   </div>
 
   <!-- Timer / Start session — lives right under Currently reading so the
@@ -737,7 +749,7 @@
   </div>
 </div>
 
-<script src="app.js?v=45"></script>
+<script src="app.js?v=46"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -825,7 +837,16 @@
   // ---------- current book ----------
   function refreshCurrentBook() {
     const id = getCurrentBookId();
-    const b = findBook(id);
+    const b = id ? findBook(id) : null;
+    const filled = document.getElementById('ccFilled');
+    const empty = document.getElementById('ccEmpty');
+    if (!b) {
+      filled.style.display = 'none';
+      empty.style.display = '';
+      return;
+    }
+    filled.style.display = '';
+    empty.style.display = 'none';
     OL.applyCover(document.getElementById('ccCover'), b, 'M');
     const titleEl = document.getElementById('ccTitle');
     titleEl.textContent = b.title;

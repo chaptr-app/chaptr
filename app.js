@@ -1967,7 +1967,10 @@ async function askCoachMore(nudgeText) {
 }
 
 // ---------- current book ----------
-function getCurrentBookId() { return Store.get(K.currentBook, 'b2'); }
+// Default null — a brand-new user shouldn't be auto-assigned a seeded book.
+// Today's "Currently reading" card renders an empty state that prompts them
+// to pick from Reading / Want-to-read instead.
+function getCurrentBookId() { return Store.get(K.currentBook, null); }
 function setCurrentBookId(id) { Store.set(K.currentBook, id); }
 
 // ---------- formatting ----------

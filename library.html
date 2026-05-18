@@ -282,7 +282,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=45"></script>
+<script src="app.js?v=46"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
@@ -443,7 +443,38 @@
     return recs;
   }
 
+  // Cold-start (brand-new user with no sessions and no shelved books): show
+  // trending books from the Worker, falling back to the curated FOR_YOU list
+  // when sync isn't reachable. Returns the same { bookId, why } shape that
+  // renderForYou expects so the rest of the pipeline doesn't have to care.
+  async function buildColdStartRecs() {
+    let trending = [];
+    try { trending = await Stats.trending(12); } catch { trending = []; }
+
+    const out = [];
+    const seen = new Set();
+    for (const t of trending) {
+      if (!t || !t.bookId || seen.has(t.bookId)) continue;
+      const b = findBook(t.bookId);
+      if (!b) continue;
+      seen.add(t.bookId);
+      const stars = t.avgRating ? `${'★'.repeat(Math.round(t.avgRating))} ${t.avgRating}` : '';
+      out.push({
+        bookId: t.bookId,
+        why: stars ? `🔥 Trending on Chaptr · ${stars}` : `🔥 Trending on Chaptr right now`,
+      });
+    }
+    // Fallback / fill: curated FOR_YOU picks
+    for (const r of FOR_YOU) {
+      if (seen.has(r.bookId)) continue;
+      seen.add(r.bookId);
+      out.push({ bookId: r.bookId, why: `📚 Hand-picked starter · ${r.why}` });
+    }
+    return out;
+  }
+
   let ALL_RECS = buildPersonalizedRecs();
+  let coldStartRecs = null;  // lazy-filled on first render when needed
   let activeFilter = 'all';
   let activeFormat = 'all';
 
@@ -464,21 +495,39 @@
     }
   }
 
-  function renderForYou() {
+  function isColdStart(prof) {
+    return prof.totalSessions === 0 && prof.onShelfIds.size === 0;
+  }
+
+  async function renderForYou() {
     // Recompute personalization on each render — cheap, and keeps recs fresh
     // after a new session lands or a book moves shelves.
-    ALL_RECS = buildPersonalizedRecs();
     const prof = buildReaderProfile();
+    const cold = isColdStart(prof);
+
+    if (cold) {
+      // Cold-start: replace recs with trending picks; lazy-load once.
+      if (!coldStartRecs) coldStartRecs = await buildColdStartRecs();
+      ALL_RECS = coldStartRecs;
+    } else {
+      ALL_RECS = buildPersonalizedRecs();
+    }
+
+    // Heading + subtitle reflect mode
+    const heading = document.getElementById('forYouHeading');
     const subtitle = document.getElementById('forYouSubtitle');
-    if (subtitle) {
-      if (prof.totalSessions === 0) {
-        subtitle.textContent = `Log a few sessions and this list will start to feel like yours.`;
-      } else {
+    if (cold) {
+      if (heading) heading.textContent = 'Trending on Chaptr.';
+      if (subtitle) subtitle.textContent = `Add a few books to your shelves and this list will start to feel like yours.`;
+    } else {
+      if (heading) heading.textContent = 'Picked from your reading history.';
+      if (subtitle) {
         const g = prof.topGenres[0];
         const tail = prof.avgPages ? ` · avg finish ~${prof.avgPages}p` : '';
         subtitle.textContent = `Based on ${prof.totalSessions} session${prof.totalSessions === 1 ? '' : 's'}${g ? ' · top genre ' + g.toLowerCase() : ''}${tail}.`;
       }
     }
+
     const el = document.getElementById('forYouFeed');
     const recs = ALL_RECS.filter(rec => {
       const b = findBook(rec.bookId);
