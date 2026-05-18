@@ -61,9 +61,15 @@
   .view-card h3 { font-size: 1.6rem; margin-bottom: 4px; }
   .view-card .lead { color: var(--ink-2); margin-bottom: 18px; }
   .view-card ul { padding: 0; list-style: none; display: grid; gap: 10px; }
-  .view-card li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; font-size: .95rem; color: var(--ink-2); }
-  .view-card li::before { content: ''; }
-  .view-card .icon { width: 22px; height: 22px; border-radius: 6px; background: var(--primary-tint); display: grid; place-items: center; color: var(--primary); font-size: .75rem; font-weight: 700; }
+  .view-card li {
+    display: grid; grid-template-columns: 22px 1fr; gap: 10px;
+    align-items: start; font-size: .95rem; color: var(--ink-2); line-height: 1.4;
+  }
+  .view-card .icon {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: var(--primary-tint); color: var(--primary);
+    display: grid; place-items: center; font-size: .8rem; font-weight: 700;
+  }
 
   /* ai demo */
   .ai-demo { padding: 60px 0; }
@@ -246,6 +252,6 @@
   </div>
 </footer>
 
-<script src="app.js?v=47"></script>
+<script src="app.js?v=48"></script>
 </body>
 </html>
