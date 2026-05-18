@@ -69,10 +69,14 @@
   .genre-bar .num { text-align: right; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 
   .mood-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-  .mood-cell { padding: 16px; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }
-  .mood-cell .em { font-size: 1.8rem; }
-  .mood-cell .ct { font-family: var(--serif); font-size: 1.4rem; margin-top: 6px; }
-  .mood-cell .lb { font-size: .78rem; color: var(--ink-3); }
+  @media (max-width: 540px) { .mood-grid { grid-template-columns: repeat(2, 1fr); } }
+  .mood-cell {
+    padding: 14px 8px; text-align: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+  }
+  .mood-cell .em { font-size: 1.6rem; line-height: 1; }
+  .mood-cell .ct { font-family: var(--serif); font-size: 1.3rem; margin-top: 4px; line-height: 1; }
+  .mood-cell .lb { font-size: .72rem; color: var(--ink-3); margin-top: 4px; }
 
   .persona-card { background: linear-gradient(180deg, #FFF, var(--primary-tint)); }
   .persona-card .quote { font-family: var(--serif); font-size: 1.4rem; line-height: 1.3; color: var(--ink); margin: 8px 0 12px; }
@@ -88,9 +92,20 @@
   .yc-ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
   .yc-bg { fill: none; stroke: var(--surface-2); stroke-width: 8; }
   .yc-fg { fill: none; stroke: var(--primary); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .6s ease; }
-  .yc-center { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; gap: 2px; }
-  .yc-cur { font-family: var(--serif); font-size: 2.4rem; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
-  .yc-target { font-size: .76rem; letter-spacing: .04em; color: var(--ink-3); margin-top: 6px; }
+  .yc-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center; line-height: 1;
+  }
+  .yc-cur {
+    font-family: var(--serif); font-size: 2.4rem; line-height: 1;
+    color: var(--ink); font-variant-numeric: tabular-nums; display: block;
+  }
+  .yc-target {
+    font-size: .76rem; letter-spacing: .04em; color: var(--ink-3);
+    margin-top: 6px; line-height: 1.1; display: block;
+  }
   .yc-controls {
     display: flex; flex-direction: column; gap: 14px; align-items: center;
     width: 100%; max-width: 340px;
@@ -362,12 +377,7 @@
     <div class="eyebrow">Mood log</div>
     <h2>How recent sessions felt.</h2>
     <div class="card" style="margin-top:14px;">
-      <div class="mood-grid">
-        <div class="mood-cell"><div class="em">😌</div><div class="ct" id="moodPeaceful">0</div><div class="lb">peaceful</div></div>
-        <div class="mood-cell"><div class="em">⚡</div><div class="ct" id="moodEnergized">0</div><div class="lb">energized</div></div>
-        <div class="mood-cell"><div class="em">😴</div><div class="ct" id="moodSleepy">0</div><div class="lb">sleepy</div></div>
-        <div class="mood-cell"><div class="em">🤯</div><div class="ct" id="moodWow">0</div><div class="lb">mind-blown</div></div>
-      </div>
+      <div class="mood-grid" id="moodGrid"></div>
     </div>
   </section>
 
@@ -463,7 +473,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=39"></script>
+<script src="app.js?v=40"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
@@ -545,14 +555,23 @@
   }
 
   // --- mood counts ---
+  const MOOD_OPTIONS = [
+    { em: '😌', lb: 'Peaceful' },
+    { em: '⚡', lb: 'Energized' },
+    { em: '🤯', lb: 'Mind-blown' },
+    { em: '😢', lb: 'Moved' },
+    { em: '😂', lb: 'Funny' },
+    { em: '😨', lb: 'Tense' },
+    { em: '🤔', lb: 'Thinking' },
+    { em: '😴', lb: 'Sleepy' },
+  ];
   function renderMoods() {
     const hist = Store.get(K.history, []);
-    const counts = { '😌': 0, '⚡': 0, '😴': 0, '🤯': 0 };
+    const counts = Object.fromEntries(MOOD_OPTIONS.map(m => [m.em, 0]));
     for (const e of hist) if (e.mood && counts[e.mood] !== undefined) counts[e.mood] += 1;
-    document.getElementById('moodPeaceful').textContent = counts['😌'];
-    document.getElementById('moodEnergized').textContent = counts['⚡'];
-    document.getElementById('moodSleepy').textContent = counts['😴'];
-    document.getElementById('moodWow').textContent = counts['🤯'];
+    document.getElementById('moodGrid').innerHTML = MOOD_OPTIONS.map(m =>
+      `<div class="mood-cell"><div class="em">${m.em}</div><div class="ct">${counts[m.em]}</div><div class="lb">${m.lb}</div></div>`
+    ).join('');
   }
 
   // --- reading calendar (GitHub-style heatmap) ---

@@ -27,18 +27,30 @@
     display: inline-flex; align-items: center; gap: 18px;
     padding: 8px 18px; background: var(--surface);
     border: 1px solid var(--border); border-radius: var(--r-pill);
-    font-size: .9rem;
+    font-size: .9rem; flex-wrap: nowrap; max-width: 100%;
   }
-  @media (max-width: 480px) { .quick-stats { gap: 12px; padding: 8px 14px; font-size: .82rem; } }
-  .qs-streak, .qs-goal { display: inline-flex; align-items: center; gap: 6px; }
+  .qs-streak, .qs-goal {
+    display: inline-flex; align-items: center; gap: 6px;
+    white-space: nowrap; flex-shrink: 0;
+  }
   .qs-streak { color: var(--ink); }
   .qs-icon { font-size: 1rem; }
   .qs-num { font-family: var(--serif); font-size: 1.05rem; color: var(--ink); font-variant-numeric: tabular-nums; }
-  .qs-lbl { color: var(--ink-3); font-size: .82rem; }
-  .qs-freeze { color: var(--ink-3); margin-left: 2px; }
+  .qs-lbl { color: var(--ink-3); font-size: .82rem; white-space: nowrap; }
+  .qs-freeze { color: var(--ink-3); margin-left: 2px; white-space: nowrap; }
   .qs-goal { padding-left: 18px; border-left: 1px solid var(--border); }
-  @media (max-width: 480px) { .qs-goal { padding-left: 12px; } }
-  .qs-ring { width: 28px; height: 28px; margin-left: 4px; }
+  .qs-ring { width: 28px; height: 28px; margin-left: 4px; flex-shrink: 0; }
+  @media (max-width: 480px) {
+    .quick-stats { gap: 10px; padding: 7px 12px; font-size: .78rem; }
+    .qs-goal { padding-left: 10px; }
+    .qs-num { font-size: .95rem; }
+    .qs-lbl { font-size: .72rem; }
+    .qs-ring { width: 22px; height: 22px; margin-left: 2px; }
+  }
+  @media (max-width: 360px) {
+    .quick-stats { gap: 8px; padding: 6px 10px; font-size: .72rem; }
+    .qs-streak .qs-lbl, .qs-goal .qs-lbl { display: none; } /* drop labels on tiny phones */
+  }
 
   /* Currently reading hero (full-width, prominent) */
   .cc-hero { margin-top: 4px; }
@@ -157,40 +169,48 @@
   .recent-row .rr-meta .chip.dur { background: var(--primary-tint); color: var(--primary); font-weight: 600; }
   .recent-row .rr-mood { font-size: 1.1rem; line-height: 1; }
 
-  /* Monthly review printout */
+  /* Monthly review — calendar with covers on completion days */
   .month-review { margin-top: 18px; }
   .month-rev-head { margin-bottom: 12px; }
-  .month-rev-stats {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-    margin-bottom: 18px;
+  .mr-cal-grid-head, .mr-cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
   }
-  @media (max-width: 540px) { .month-rev-stats { grid-template-columns: repeat(2, 1fr); } }
-  .mr-tile {
-    padding: 12px 10px; background: var(--bg); border: 1px solid var(--border);
-    border-radius: var(--r-sm); text-align: center;
+  .mr-cal-grid-head {
+    margin-bottom: 4px;
   }
-  .mr-tile .mr-v {
-    font-family: var(--serif); font-size: 1.5rem; color: var(--ink);
-    font-variant-numeric: tabular-nums; line-height: 1;
+  .mr-cal-grid-head .dow {
+    font-size: .65rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600; text-align: center; padding: 4px 0;
   }
-  .mr-tile .mr-l {
-    font-size: .68rem; letter-spacing: .06em; text-transform: uppercase;
-    color: var(--ink-3); font-weight: 600; margin-top: 6px;
+  .mr-cal-cell {
+    aspect-ratio: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 5px; position: relative; overflow: hidden;
+    display: flex; align-items: stretch; justify-content: stretch;
   }
-  .mr-section { margin-top: 14px; }
-  .mr-book-list { display: flex; flex-direction: column; gap: 6px; }
-  .mr-book {
-    display: grid; grid-template-columns: 32px 1fr auto; gap: 10px;
-    align-items: center; padding: 8px 10px;
-    background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm);
+  .mr-cal-cell .day-num {
+    position: absolute; top: 3px; left: 5px;
+    font-size: .65rem; color: var(--ink-3); font-variant-numeric: tabular-nums;
+    z-index: 2; text-shadow: 0 0 3px var(--surface);
   }
-  .mr-book .mr-cv {
-    width: 32px; height: 46px; border-radius: 3px; box-shadow: var(--shadow-sm);
-    background-size: cover !important; background-position: center !important;
+  .mr-cal-cell.today { border-color: var(--accent); border-width: 2px; }
+  .mr-cal-cell.outside { background: transparent; border-color: transparent; }
+  .mr-cal-cell.outside .day-num { color: var(--surface-2); }
+  .mr-cal-cell.has-book .day-num { color: #FFF; text-shadow: 0 0 4px rgba(0,0,0,.6); }
+  .mr-cell-cover {
+    flex: 1; background-size: cover !important; background-position: center !important;
+    border-radius: 4px; position: relative; cursor: pointer;
   }
-  .mr-book .mr-title { font-family: var(--serif); font-size: .92rem; color: var(--ink); line-height: 1.15; }
-  .mr-book .mr-sub { font-size: .76rem; color: var(--ink-3); margin-top: 2px; }
-  .mr-book .mr-min { font-size: .8rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .mr-cell-cover.extra::after {
+    content: '+' attr(data-extra);
+    position: absolute; bottom: 3px; right: 4px;
+    background: rgba(0,0,0,.55); color: #FFF; font-size: .62rem;
+    font-weight: 600; padding: 1px 5px; border-radius: 8px;
+  }
+  .mr-empty {
+    text-align: center; padding: 18px 8px; margin-top: 12px;
+    color: var(--ink-3); font-size: .88rem; border: 1px dashed var(--border);
+    border-radius: var(--r-sm);
+  }
   .mr-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
   @media print {
     nav.nav, .footer, .mr-footer { display: none !important; }
@@ -391,8 +411,22 @@
   .field input { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-sm); font: inherit; background: var(--bg); color: var(--ink); }
   .field input:focus { outline: 0; border-color: var(--primary); background: var(--surface); }
   .mood-row { display: flex; gap: 8px; }
-  .mood-btn { width: 44px; height: 44px; border-radius: var(--r-pill); border: 1px solid var(--border); background: var(--surface); font-size: 1.3rem; }
+  .mood-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  }
+  @media (max-width: 480px) { .mood-row { grid-template-columns: repeat(3, 1fr); } }
+  .mood-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; min-height: 64px; padding: 8px 4px;
+    border-radius: var(--r-md); border: 1px solid var(--border);
+    background: var(--surface); cursor: pointer;
+    -webkit-tap-highlight-color: transparent; transition: all .12s;
+  }
+  .mood-btn:hover { border-color: var(--primary); }
+  .mood-btn .em { font-size: 1.5rem; line-height: 1; }
+  .mood-btn .lb { font-size: .68rem; color: var(--ink-3); font-weight: 500; }
   .mood-btn.selected { border-color: var(--primary); background: var(--primary-tint); }
+  .mood-btn.selected .lb { color: var(--primary); }
   .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 </style>
 </head>
@@ -564,32 +598,23 @@
         <div class="recent-rows" id="recentRows"></div>
       </div>
 
-      <!-- Monthly review printout — Bookly-style snapshot of the current month. -->
+      <!-- Monthly review — calendar of the current month with a book cover
+           on each day a book was finished. -->
       <div class="card month-review" id="monthReviewCard" style="margin-top:18px;">
         <div class="month-rev-head">
-          <div class="eyebrow">Monthly review</div>
-          <h3 id="monthRevTitle" style="margin:6px 0 0;">This month</h3>
+          <div class="row between" style="align-items:baseline; gap:10px; flex-wrap:wrap;">
+            <div>
+              <div class="eyebrow">Monthly review</div>
+              <h3 id="monthRevTitle" style="margin:6px 0 0;">This month</h3>
+            </div>
+            <div class="muted" id="monthRevSummary" style="font-size:.85rem;"></div>
+          </div>
         </div>
-        <div class="month-rev-stats">
-          <div class="mr-tile"><div class="mr-v" id="mrFinished">0</div><div class="mr-l">Finished</div></div>
-          <div class="mr-tile"><div class="mr-v" id="mrTime">0m</div><div class="mr-l">Time read</div></div>
-          <div class="mr-tile"><div class="mr-v" id="mrSessions">0</div><div class="mr-l">Sessions</div></div>
-          <div class="mr-tile"><div class="mr-v" id="mrPages">0</div><div class="mr-l">Pages</div></div>
-        </div>
-        <div class="mr-section" id="mrFinishedSection" style="display:none;">
-          <div class="eyebrow" style="margin-bottom:8px;">Books I finished</div>
-          <div class="mr-book-list" id="mrFinishedList"></div>
-        </div>
-        <div class="mr-section" id="mrInProgressSection" style="display:none;">
-          <div class="eyebrow" style="margin-bottom:8px;">Still in progress</div>
-          <div class="mr-book-list" id="mrProgressList"></div>
-        </div>
-        <div class="mr-section" id="mrEmptySection">
-          <div class="muted" style="text-align:center; padding:18px 8px;">No reads logged yet this month. Start a session to fill this in.</div>
-        </div>
+        <div class="mr-cal-grid-head" id="mrCalHead"></div>
+        <div class="mr-cal-grid" id="mrCalGrid"></div>
+        <div class="mr-empty" id="mrCalEmpty" style="display:none;">No books finished yet this month — your covers will land here.</div>
         <div class="mr-footer">
           <button class="btn btn-outline btn-sm" id="mrPrintBtn">🖨 Print / Save PDF</button>
-          <button class="btn btn-ghost btn-sm" id="mrShareBtn">Copy summary</button>
         </div>
       </div>
     </div>
@@ -686,10 +711,14 @@
     <div class="field">
       <label>How did it feel?</label>
       <div class="mood-row" id="moodRow2">
-        <button class="mood-btn" data-mood="😌" title="Peaceful">😌</button>
-        <button class="mood-btn" data-mood="⚡" title="Energized">⚡</button>
-        <button class="mood-btn" data-mood="😴" title="Sleepy">😴</button>
-        <button class="mood-btn" data-mood="🤯" title="Mind-blown">🤯</button>
+        <button class="mood-btn" type="button" data-mood="😌"><span class="em">😌</span><span class="lb">Peaceful</span></button>
+        <button class="mood-btn" type="button" data-mood="⚡"><span class="em">⚡</span><span class="lb">Energized</span></button>
+        <button class="mood-btn" type="button" data-mood="🤯"><span class="em">🤯</span><span class="lb">Mind-blown</span></button>
+        <button class="mood-btn" type="button" data-mood="😢"><span class="em">😢</span><span class="lb">Moved</span></button>
+        <button class="mood-btn" type="button" data-mood="😂"><span class="em">😂</span><span class="lb">Funny</span></button>
+        <button class="mood-btn" type="button" data-mood="😨"><span class="em">😨</span><span class="lb">Tense</span></button>
+        <button class="mood-btn" type="button" data-mood="🤔"><span class="em">🤔</span><span class="lb">Thinking</span></button>
+        <button class="mood-btn" type="button" data-mood="😴"><span class="em">😴</span><span class="lb">Sleepy</span></button>
       </div>
     </div>
     <div class="actions">
@@ -699,7 +728,7 @@
   </div>
 </div>
 
-<script src="app.js?v=39"></script>
+<script src="app.js?v=40"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -1245,89 +1274,82 @@
     }).join('');
   }
 
-  // ---------- monthly review (Bookly-style printout) ----------
+  // ---------- monthly review (calendar with covers on completion days) ----------
   function renderMonthReview() {
     const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth(); // 0–11
     const monthName = now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    const startKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const startKey = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const nextMonth = new Date(year, month + 1, 1);
     const endKey = nextMonth.toISOString().slice(0, 10);
     document.getElementById('monthRevTitle').textContent = monthName;
 
+    // A book is "completed on a given day" if (a) it currently lives on the
+    // Read shelf and (b) the last logged session for it falls inside this
+    // month — that session's date is treated as the finish date.
     const hist = Store.get(K.history, []);
     const monthSessions = hist.filter(e => e.date >= startKey && e.date < endKey);
-    const totalMs = monthSessions.reduce((a, e) => a + (e.ms || e.minutes * 60000), 0);
-    const totalMins = Math.round(totalMs / 60000);
-    const totalPages = monthSessions.reduce((a, e) => a + (e.pages || 0), 0);
+    const readShelf = new Set((getShelves().read) || []);
 
-    // Per-book aggregation
-    const byBook = {};
+    // last session date for each book this month
+    const lastSessionByBook = {};
     monthSessions.forEach(e => {
-      if (!byBook[e.bookId]) byBook[e.bookId] = { mins: 0, pages: 0, sessions: 0, ms: 0 };
-      byBook[e.bookId].ms += (e.ms || e.minutes * 60000);
-      byBook[e.bookId].mins += e.minutes || 0;
-      byBook[e.bookId].pages += e.pages || 0;
-      byBook[e.bookId].sessions += 1;
+      const prev = lastSessionByBook[e.bookId];
+      if (!prev || e.date > prev) lastSessionByBook[e.bookId] = e.date;
+    });
+    // bucket completions by date
+    const completionsByDate = {};
+    Object.keys(lastSessionByBook).forEach(bookId => {
+      if (!readShelf.has(bookId)) return; // only count books currently on Read
+      const d = lastSessionByBook[bookId];
+      (completionsByDate[d] ||= []).push(bookId);
     });
 
-    // Books "finished this month" = currently on Read shelf + had a session this month
-    const shelves = getShelves();
-    const readShelf = new Set(shelves.read || []);
-    const finishedIds = Object.keys(byBook).filter(id => readShelf.has(id));
-    const progressIds = Object.keys(byBook).filter(id => !readShelf.has(id));
+    const finishedCount = Object.values(completionsByDate).reduce((a, arr) => a + arr.length, 0);
+    const totalMs = monthSessions.reduce((a, e) => a + (e.ms || e.minutes * 60000), 0);
+    const totalMins = Math.round(totalMs / 60000);
+    document.getElementById('monthRevSummary').textContent = finishedCount
+      ? `${finishedCount} finished · ${fmtDuration({ minutes: totalMins, ms: totalMs })} read`
+      : `${fmtDuration({ minutes: totalMins, ms: totalMs })} read so far`;
 
-    document.getElementById('mrFinished').textContent = finishedIds.length;
-    document.getElementById('mrTime').textContent = fmtDuration({ minutes: totalMins, ms: totalMs });
-    document.getElementById('mrSessions').textContent = monthSessions.length;
-    document.getElementById('mrPages').textContent = totalPages;
+    // Build the calendar — Sun-start. Pad with leading "outside" cells.
+    const firstDow = new Date(year, month, 1).getDay();
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const todayKey = new Date().toISOString().slice(0, 10);
 
-    const fmtBookRow = (id) => {
-      const b = findBook(id);
-      const st = byBook[id];
-      const stMins = Math.max(1, Math.round(st.ms / 60000));
-      const fmtIcons = (typeof getBookFormats === 'function') ? getBookFormats(id).map(f => bookFormatMeta(f).emoji).join('') : '';
-      return `<div class="mr-book">
-        <div class="mr-cv" data-mr-cover="${id}"></div>
-        <div>
-          <div class="mr-title">${fmtIcons ? fmtIcons + ' ' : ''}${b.title}</div>
-          <div class="mr-sub">${b.author}</div>
-        </div>
-        <div class="mr-min">${stMins}m · ${st.sessions} session${st.sessions === 1 ? '' : 's'}</div>
-      </div>`;
-    };
+    const headEl = document.getElementById('mrCalHead');
+    headEl.innerHTML = DOW_LABELS.map(d => `<div class="dow">${d.slice(0, 1)}</div>`).join('');
 
-    const finSec = document.getElementById('mrFinishedSection');
-    const progSec = document.getElementById('mrInProgressSection');
-    const emptySec = document.getElementById('mrEmptySection');
-    if (finishedIds.length) {
-      finSec.style.display = '';
-      document.getElementById('mrFinishedList').innerHTML = finishedIds.map(fmtBookRow).join('');
-    } else { finSec.style.display = 'none'; }
-    if (progressIds.length) {
-      progSec.style.display = '';
-      document.getElementById('mrProgressList').innerHTML = progressIds.map(fmtBookRow).join('');
-    } else { progSec.style.display = 'none'; }
-    emptySec.style.display = (finishedIds.length || progressIds.length) ? 'none' : '';
+    const cells = [];
+    for (let i = 0; i < firstDow; i++) {
+      cells.push(`<div class="mr-cal-cell outside"></div>`);
+    }
+    for (let d = 1; d <= lastDay; d++) {
+      const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const books = completionsByDate[dateKey] || [];
+      const isToday = dateKey === todayKey;
+      const cls = ['mr-cal-cell', isToday ? 'today' : '', books.length ? 'has-book' : ''].filter(Boolean).join(' ');
+      let inner = '';
+      if (books.length) {
+        const primary = books[0];
+        const extra = books.length > 1 ? ` extra` : '';
+        const extraAttr = books.length > 1 ? ` data-extra="${books.length - 1}"` : '';
+        inner = `<a href="book.html?id=${encodeURIComponent(primary)}" class="mr-cell-cover${extra}" data-mr-cell-cover="${primary}"${extraAttr} aria-label="${escapeHtmlPlain(findBook(primary).title)}"></a>`;
+      }
+      cells.push(`<div class="${cls}"><span class="day-num">${d}</span>${inner}</div>`);
+    }
+    document.getElementById('mrCalGrid').innerHTML = cells.join('');
+    document.getElementById('mrCalEmpty').style.display = finishedCount ? 'none' : '';
 
-    // Paint covers
-    document.querySelectorAll('[data-mr-cover]').forEach(node => {
-      const b = findBook(node.dataset.mrCover);
-      if (b) OL.applyCover(node, b, 'S');
+    // paint covers
+    document.querySelectorAll('[data-mr-cell-cover]').forEach(node => {
+      const b = findBook(node.dataset.mrCellCover);
+      if (b) OL.applyCover(node, b, 'M');
     });
   }
   function wireMonthReview() {
     document.getElementById('mrPrintBtn').addEventListener('click', () => window.print());
-    document.getElementById('mrShareBtn').addEventListener('click', () => {
-      const title = document.getElementById('monthRevTitle').textContent;
-      const fin = document.getElementById('mrFinished').textContent;
-      const time = document.getElementById('mrTime').textContent;
-      const sess = document.getElementById('mrSessions').textContent;
-      const pages = document.getElementById('mrPages').textContent;
-      const text = `📖 Chaptr — ${title}\n✓ ${fin} finished · ${time} read · ${sess} sessions · ${pages} pages`;
-      navigator.clipboard?.writeText(text);
-      const btn = document.getElementById('mrShareBtn');
-      const orig = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = orig, 1500);
-    });
   }
 
   // ---------- reading buddies (Phase 4) ----------

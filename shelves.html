@@ -167,6 +167,20 @@
 
   /* multi-format icons in row meta */
   .fmt-icons { letter-spacing: 1px; }
+
+  /* tag dialog — format pills (the new default) */
+  .tag-format-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag-format-pill {
+    padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--r-pill);
+    background: var(--surface); color: var(--ink-3); font: inherit; font-size: .85rem;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; transition: all .12s;
+  }
+  .tag-format-pill:hover { border-color: var(--primary); color: var(--primary); }
+  .tag-format-pill.active { background: var(--primary); border-color: var(--primary); color: #FFF; }
+  .tag-shelves-details summary::-webkit-details-marker { display: none; }
+  .tag-shelves-details summary { list-style: none; }
+  .tag-shelves-details summary::before { content: '▸ '; color: var(--ink-3); }
+  .tag-shelves-details[open] summary::before { content: '▾ '; }
 </style>
 </head>
 <body>
@@ -232,14 +246,26 @@
 
 <div class="dlg-back" id="tagDlg">
   <div class="dlg-card" role="dialog" aria-modal="true">
-    <div class="eyebrow">Tag with shelves</div>
+    <div class="eyebrow">Tag this book</div>
     <h3 id="tagBookTitle" style="margin:0 0 4px;">Book</h3>
     <div class="muted" id="tagBookAuthor" style="font-size:.9rem;"></div>
-    <div class="shelf-checks" id="shelfChecks"></div>
-    <div class="new-shelf-row">
-      <input class="new-shelf-input" id="newShelfInput" placeholder="+ Create new shelf (e.g. 'Fall 2026')">
-      <button class="btn btn-outline btn-sm" id="newShelfBtn">Add</button>
+
+    <div style="margin-top:18px;">
+      <label style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600;">Ways I own this</label>
+      <div class="tag-format-row" id="tagFormatRow" style="margin-top:8px;"></div>
     </div>
+
+    <details class="tag-shelves-details" style="margin-top:18px;">
+      <summary style="cursor:pointer; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600; padding:4px 0;">
+        Custom shelves <span class="muted" style="text-transform:none; letter-spacing:0; font-weight:400;">— optional</span>
+      </summary>
+      <div class="shelf-checks" id="shelfChecks" style="margin-top:10px;"></div>
+      <div class="new-shelf-row">
+        <input class="new-shelf-input" id="newShelfInput" placeholder="+ Create new shelf (e.g. 'Fall 2026')">
+        <button class="btn btn-outline btn-sm" id="newShelfBtn">Add</button>
+      </div>
+    </details>
+
     <div class="dlg-actions">
       <div></div>
       <div class="right">
@@ -341,7 +367,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=39"></script>
+<script src="app.js?v=40"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
@@ -352,7 +378,7 @@
           getSmartShelves, getSmartShelfById, isSmartShelfId,
           getBookProgress, Coach, ShelvesBackend, syncSharedShelves, Auth, Sync,
           renderSpoilers,
-          getBookFormat, getBookFormats, hasBookFormat, bookFormatMeta, BOOK_FORMATS } = window.Chaptr;
+          getBookFormat, getBookFormats, hasBookFormat, toggleBookFormat, bookFormatMeta, BOOK_FORMATS } = window.Chaptr;
 
   function starString(rating) {
     if (!rating) return '';
@@ -760,8 +786,22 @@
     document.getElementById('tagBookTitle').textContent = b.title;
     document.getElementById('tagBookAuthor').textContent = b.author;
     document.getElementById('newShelfInput').value = '';
+    paintTagFormats();
     paintTagChecks();
     tagDlg.classList.add('open');
+  }
+  function paintTagFormats() {
+    const wrap = document.getElementById('tagFormatRow');
+    const owned = new Set(getBookFormats(tagBookId));
+    wrap.innerHTML = BOOK_FORMATS.map(f =>
+      `<button type="button" class="tag-format-pill ${owned.has(f.id) ? 'active' : ''}" data-fmt="${f.id}" aria-pressed="${owned.has(f.id)}">${f.emoji} ${f.short}</button>`
+    ).join('');
+    wrap.querySelectorAll('[data-fmt]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        toggleBookFormat(tagBookId, btn.dataset.fmt);
+        paintTagFormats();
+      });
+    });
   }
   function paintTagChecks() {
     const wrap = document.getElementById('shelfChecks');

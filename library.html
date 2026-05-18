@@ -231,9 +231,10 @@
   <section class="section-head">
     <div>
       <div class="eyebrow">For you</div>
-      <h2>Picked from your pace.</h2>
+      <h2 id="forYouHeading">Picked from your reading history.</h2>
+      <p class="muted" id="forYouSubtitle" style="font-size:.85rem; margin:4px 0 0;"></p>
     </div>
-    <span class="pill pill-primary">Ranked by Claude · updated daily</span>
+    <span class="pill pill-primary">Personalized</span>
   </section>
   <div class="foryou" id="forYouFeed"></div>
 
@@ -281,7 +282,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=39"></script>
+<script src="app.js?v=40"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
@@ -328,16 +329,121 @@
   // Format: https://chaptr-ask.<your-subdomain>.workers.dev
   function getWorkerUrl() { return Store.get('chaptr.workerUrl', '') || ''; }
 
-  // ---------- For You ----------
-  // augment recs with all catalog books so filters have something to bite into
-  const ALL_RECS = (() => {
-    const seenIds = new Set(FOR_YOU.map(r => r.bookId));
-    const extras = CATALOG.filter(b => !seenIds.has(b.id)).map(b => ({
-      bookId: b.id,
-      why: `Discovered for you · ${b.genre.toLowerCase()} at ${b.pages}p`,
-    }));
-    return FOR_YOU.concat(extras);
-  })();
+  // ---------- For You — personalized per user ----------
+  // Read the user's history, shelves, and reviews to compute a personal
+  // signal set, then re-rank the catalog with a tailored "why" string
+  // for the top reason each book matches.
+  function buildReaderProfile() {
+    const hist = Store.get(K.history, []);
+    const shelves = getShelves();
+    const reviews = (typeof getReviews === 'function') ? getReviews() : {};
+    const readIds = new Set([...(shelves.read || [])]);
+    const onShelfIds = new Set([...(shelves.read || []), ...(shelves.reading || []), ...(shelves.wantToRead || [])]);
+
+    // genre weights from session minutes (recent sessions weigh more)
+    const genreMins = {};
+    const authorMins = {};
+    const now = Date.now();
+    hist.forEach(e => {
+      const b = findBook(e.bookId);
+      if (!b) return;
+      const ageDays = Math.max(1, (now - new Date(e.date + 'T00:00:00').getTime()) / 86400000);
+      const weight = (e.minutes || 0) * Math.exp(-ageDays / 60); // half-life ≈ 6 weeks
+      genreMins[b.genre] = (genreMins[b.genre] || 0) + weight;
+      authorMins[b.author] = (authorMins[b.author] || 0) + weight;
+    });
+    const topGenres = Object.entries(genreMins).sort((a, b) => b[1] - a[1]).map(([g]) => g);
+    const topAuthors = Object.entries(authorMins).sort((a, b) => b[1] - a[1]).map(([a]) => a);
+
+    // loved authors: rated >= 4 on any book by them
+    const lovedAuthors = new Set();
+    Object.entries(reviews).forEach(([bookId, r]) => {
+      if (r && r.rating >= 4) {
+        const b = findBook(bookId);
+        if (b) lovedAuthors.add(b.author);
+      }
+    });
+
+    // average finished length
+    const finishedBooks = [...readIds].map(findBook).filter(Boolean);
+    const avgPages = finishedBooks.length
+      ? Math.round(finishedBooks.reduce((a, b) => a + b.pages, 0) / finishedBooks.length)
+      : null;
+
+    // average session length (minutes)
+    const sessionMins = hist.map(e => e.minutes || 0).filter(n => n > 0);
+    const avgSession = sessionMins.length
+      ? Math.round(sessionMins.reduce((a, n) => a + n, 0) / sessionMins.length)
+      : null;
+
+    const totalSessions = hist.length;
+
+    return { topGenres, topAuthors, lovedAuthors, avgPages, avgSession, onShelfIds, readIds, totalSessions, reviews };
+  }
+
+  function scoreAndExplain(book, prof) {
+    if (prof.onShelfIds.has(book.id)) return null; // hide books already on a shelf
+    const hoursForMe = bookHoursForMe(book);
+    let score = 0;
+    let why = '';
+
+    // Favorite author (highest priority)
+    if (prof.lovedAuthors.has(book.author)) {
+      score += 70;
+      const r = Object.entries(prof.reviews).find(([id, rv]) => {
+        const b = findBook(id); return b && b.author === book.author && rv && rv.rating >= 4;
+      });
+      const stars = r ? '★'.repeat(r[1].rating) : '★★★★';
+      why = why || `More from ${book.author}, who you rated ${stars}`;
+    } else if (prof.topAuthors.includes(book.author)) {
+      score += 35;
+      why = why || `You've spent time with ${book.author} before`;
+    }
+
+    // Genre match
+    const gIdx = prof.topGenres.indexOf(book.genre);
+    if (gIdx === 0) { score += 50; why = why || `Your top genre lately — ${book.genre.toLowerCase()}`; }
+    else if (gIdx === 1) { score += 30; why = why || `Pairs with your recent ${book.genre.toLowerCase()} reads`; }
+    else if (gIdx >= 2)  { score += 12; why = why || `${book.genre} — you've sampled this lately`; }
+
+    // Length fit
+    if (prof.avgPages) {
+      const diff = Math.abs(book.pages - prof.avgPages) / prof.avgPages;
+      if (diff < 0.25) { score += 20; why = why || `About your usual finish length (${book.pages}p)`; }
+      else if (book.pages < prof.avgPages * 0.7) { score += 8; why = why || `Shorter than your usual — ${book.pages}p`; }
+    }
+
+    // Session-fit (quick reads)
+    if (prof.avgSession && hoursForMe * 60 / 8 < prof.avgSession * 1.2) {
+      score += 6;
+      why = why || `About 8 sessions at your usual ${prof.avgSession}-min pace`;
+    }
+
+    // Cold-start fallback
+    if (!why) {
+      if (prof.totalSessions === 0) {
+        why = `A popular pick to get you started — ${book.genre.toLowerCase()}, ~${Math.round(hoursForMe)}h at avg pace`;
+      } else {
+        why = `~${Math.round(hoursForMe)}h at your pace · ${book.genre.toLowerCase()}`;
+      }
+    }
+
+    return { score, why };
+  }
+
+  function buildPersonalizedRecs() {
+    const prof = buildReaderProfile();
+    const recs = [];
+    for (const b of CATALOG) {
+      const res = scoreAndExplain(b, prof);
+      if (!res) continue;
+      recs.push({ bookId: b.id, why: res.why, _score: res.score });
+    }
+    recs.sort((a, b) => b._score - a._score);
+    return recs;
+  }
+
+  let ALL_RECS = buildPersonalizedRecs();
   let activeFilter = 'all';
   let activeFormat = 'all';
 
@@ -359,6 +465,20 @@
   }
 
   function renderForYou() {
+    // Recompute personalization on each render — cheap, and keeps recs fresh
+    // after a new session lands or a book moves shelves.
+    ALL_RECS = buildPersonalizedRecs();
+    const prof = buildReaderProfile();
+    const subtitle = document.getElementById('forYouSubtitle');
+    if (subtitle) {
+      if (prof.totalSessions === 0) {
+        subtitle.textContent = `Log a few sessions and this list will start to feel like yours.`;
+      } else {
+        const g = prof.topGenres[0];
+        const tail = prof.avgPages ? ` · avg finish ~${prof.avgPages}p` : '';
+        subtitle.textContent = `Based on ${prof.totalSessions} session${prof.totalSessions === 1 ? '' : 's'}${g ? ' · top genre ' + g.toLowerCase() : ''}${tail}.`;
+      }
+    }
     const el = document.getElementById('forYouFeed');
     const recs = ALL_RECS.filter(rec => {
       const b = findBook(rec.bookId);
