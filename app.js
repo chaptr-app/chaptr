@@ -1319,29 +1319,66 @@ const Stats = {
 };
 
 // ---------- Book formats (V4 polish: how YOU keep this copy) ----------
-// Per-user mapping of bookId → format. Tells the app where the book lives in
-// your collection, separate from where you ARE in it (Reading/Want/Read).
+// Per-user mapping of bookId → array of formats you own this book in.
+// You can own the same book in multiple formats (hardback + Kindle, etc.).
+// Tells the app where the book lives in your collection, separate from where
+// you ARE in it (Reading/Want/Read).
 const BOOK_FORMATS = [
-  { id: 'physical', label: 'Physical', emoji: '📦', short: 'Print'  },
-  { id: 'kindle',   label: 'Kindle',   emoji: '📱', short: 'Kindle' },
-  { id: 'audible',  label: 'Audible',  emoji: '🎧', short: 'Audio'  },
-  { id: 'library',  label: 'Library',  emoji: '🏛', short: 'Loan'   },
-  { id: 'other',    label: 'Other',    emoji: '📖', short: 'Other'  },
+  { id: 'hardback',  label: 'Hardback',  emoji: '📕', short: 'Hardback'  },
+  { id: 'paperback', label: 'Paperback', emoji: '📖', short: 'Paperback' },
+  { id: 'kindle',    label: 'Kindle',    emoji: '📱', short: 'Kindle'    },
+  { id: 'ku',        label: 'Kindle Unlimited', emoji: '∞', short: 'KU'  },
+  { id: 'audible',   label: 'Audible',   emoji: '🎧', short: 'Audible'   },
+  { id: 'library',   label: 'Library',   emoji: '🏛', short: 'Library'   },
+  { id: 'other',     label: 'Other',     emoji: '📦', short: 'Other'     },
 ];
 const BOOK_FORMAT_IDS = new Set(BOOK_FORMATS.map(f => f.id));
+// Legacy → new mapping for users that already tagged books pre-multi-format.
+const LEGACY_FORMAT_MAP = { physical: 'paperback' };
 
-function getBookFormat(bookId) {
-  const m = Store.get('chaptr.bookFormats', {});
-  return BOOK_FORMAT_IDS.has(m[bookId]) ? m[bookId] : 'physical';
+function _normalizeFormatList(v) {
+  // Accepts string (legacy) or array, returns deduped array of valid format ids.
+  let arr;
+  if (Array.isArray(v)) arr = v;
+  else if (typeof v === 'string') arr = [v];
+  else return [];
+  const out = [];
+  for (const raw of arr) {
+    const id = LEGACY_FORMAT_MAP[raw] || raw;
+    if (BOOK_FORMAT_IDS.has(id) && !out.includes(id)) out.push(id);
+  }
+  return out;
 }
-function setBookFormat(bookId, format) {
-  if (!BOOK_FORMAT_IDS.has(format)) return;
+function getBookFormats(bookId) {
   const m = Store.get('chaptr.bookFormats', {});
-  m[bookId] = format;
+  return _normalizeFormatList(m[bookId]);
+}
+// Back-compat single-format accessor (returns the primary/first format).
+function getBookFormat(bookId) {
+  return getBookFormats(bookId)[0] || 'paperback';
+}
+function setBookFormats(bookId, formats) {
+  const m = Store.get('chaptr.bookFormats', {});
+  const clean = _normalizeFormatList(formats);
+  if (clean.length) m[bookId] = clean;
+  else delete m[bookId];
   Store.set('chaptr.bookFormats', m);
 }
+function setBookFormat(bookId, format) {
+  // Single-format setter — replaces the whole list with just this one.
+  setBookFormats(bookId, [format]);
+}
+function toggleBookFormat(bookId, format) {
+  if (!BOOK_FORMAT_IDS.has(format)) return;
+  const cur = getBookFormats(bookId);
+  const next = cur.includes(format) ? cur.filter(f => f !== format) : [...cur, format];
+  setBookFormats(bookId, next);
+}
+function hasBookFormat(bookId, format) {
+  return getBookFormats(bookId).includes(format);
+}
 function bookFormatMeta(format) {
-  return BOOK_FORMATS.find(f => f.id === format) || BOOK_FORMATS[0];
+  return BOOK_FORMATS.find(f => f.id === format) || BOOK_FORMATS[1]; // paperback default
 }
 
 // ---------- Affiliate links (V4 monetization polish) ----------
@@ -2074,7 +2111,8 @@ window.Chaptr = {
   FriendChallenges,
   getCustomChallenges, createCustomChallenge, deleteCustomChallenge, computeChallengeProgress,
   Affiliate, renderSpoilers,
-  BOOK_FORMATS, getBookFormat, setBookFormat, bookFormatMeta,
+  BOOK_FORMATS, getBookFormat, getBookFormats, setBookFormat, setBookFormats,
+  toggleBookFormat, hasBookFormat, bookFormatMeta,
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
   attachSwipe, mountBottomNav, mountNowReadingPill,

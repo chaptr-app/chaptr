@@ -103,15 +103,99 @@
 
   /* history */
   .history { margin-top: 28px; }
-  .sparkline { width: 100%; height: 90px; }
-  .spark-bar { fill: var(--primary); opacity: .85; }
-  .spark-bar.today { fill: var(--accent); }
-  .spark-axis { fill: var(--ink-3); font-size: 10px; font-family: var(--sans); }
-  .recent-rows { margin-top: 12px; }
-  .recent-row { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 14px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: .9rem; }
-  .recent-row:first-child { border-top: 0; }
-  .recent-row .col-title { font-family: var(--serif); color: var(--ink); }
-  .recent-row .muted { color: var(--ink-3); }
+  .hist-chart {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+    align-items: end; height: 120px; padding: 4px 0 0;
+  }
+  .hist-day { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
+  .hist-bar-wrap {
+    flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center;
+    min-height: 0;
+  }
+  .hist-bar {
+    width: 70%; min-width: 14px; max-width: 32px;
+    background: var(--primary); border-radius: 4px 4px 0 0;
+    opacity: .85; transition: opacity .15s;
+    position: relative; min-height: 2px;
+  }
+  .hist-bar.today { background: var(--accent); opacity: 1; }
+  .hist-bar.zero { background: var(--surface-2); opacity: 1; height: 2px; }
+  .hist-bar .v {
+    position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+    font-size: .68rem; color: var(--ink-3); font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .hist-day-lbl {
+    font-size: .68rem; color: var(--ink-3); letter-spacing: .04em;
+    text-transform: uppercase; font-weight: 600;
+  }
+  .hist-day.today .hist-day-lbl { color: var(--accent); }
+  .hist-legend {
+    display: flex; gap: 14px; justify-content: center; margin-top: 10px;
+    font-size: .72rem; color: var(--ink-3);
+  }
+  .hist-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+  .hist-legend .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .hist-legend .sw-day { background: var(--primary); opacity: .85; }
+  .hist-legend .sw-today { background: var(--accent); }
+  .hist-divider { height: 1px; background: var(--border); margin: 14px 0 12px; }
+  .recent-rows { display: flex; flex-direction: column; gap: 8px; }
+  .recent-row {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center;
+    padding: 10px 12px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+  }
+  .recent-row .rr-title { font-family: var(--serif); color: var(--ink); font-size: .95rem; line-height: 1.2; }
+  .recent-row .rr-meta {
+    grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap;
+    font-size: .78rem; color: var(--ink-3); margin-top: 2px;
+  }
+  .recent-row .rr-meta .chip {
+    padding: 2px 8px; background: var(--surface-2); border-radius: var(--r-pill);
+    color: var(--ink-2); font-variant-numeric: tabular-nums;
+  }
+  .recent-row .rr-meta .chip.dur { background: var(--primary-tint); color: var(--primary); font-weight: 600; }
+  .recent-row .rr-mood { font-size: 1.1rem; line-height: 1; }
+
+  /* Monthly review printout */
+  .month-review { margin-top: 18px; }
+  .month-rev-head { margin-bottom: 12px; }
+  .month-rev-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 540px) { .month-rev-stats { grid-template-columns: repeat(2, 1fr); } }
+  .mr-tile {
+    padding: 12px 10px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--r-sm); text-align: center;
+  }
+  .mr-tile .mr-v {
+    font-family: var(--serif); font-size: 1.5rem; color: var(--ink);
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .mr-tile .mr-l {
+    font-size: .68rem; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600; margin-top: 6px;
+  }
+  .mr-section { margin-top: 14px; }
+  .mr-book-list { display: flex; flex-direction: column; gap: 6px; }
+  .mr-book {
+    display: grid; grid-template-columns: 32px 1fr auto; gap: 10px;
+    align-items: center; padding: 8px 10px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm);
+  }
+  .mr-book .mr-cv {
+    width: 32px; height: 46px; border-radius: 3px; box-shadow: var(--shadow-sm);
+    background-size: cover !important; background-position: center !important;
+  }
+  .mr-book .mr-title { font-family: var(--serif); font-size: .92rem; color: var(--ink); line-height: 1.15; }
+  .mr-book .mr-sub { font-size: .76rem; color: var(--ink-3); margin-top: 2px; }
+  .mr-book .mr-min { font-size: .8rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .mr-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+  @media print {
+    nav.nav, .footer, .mr-footer { display: none !important; }
+    .month-review { box-shadow: none; border: 0; }
+  }
 
   /* book picker */
   .book-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
@@ -378,6 +462,33 @@
     <button class="btn btn-outline btn-sm" id="readWithFriendBtn" style="margin-top:10px; width:100%; display:none;">+ Read with a friend</button>
   </div>
 
+  <!-- Timer / Start session — lives right under Currently reading so the
+       primary action is always one tap from the book you're working on. -->
+  <div class="card card-lg timer-card" id="timerCardTop">
+    <div class="eyebrow" style="text-align:center;">
+      <span id="sessionLabel">Ready when you are</span>
+      <span class="heartbeat" id="heartbeat" aria-hidden="true"></span>
+    </div>
+    <div class="timer-display" id="timerDisplay">00:00</div>
+    <div class="timer-sub" id="timerSub">Pick a book to start a session.</div>
+    <div class="timer-controls" id="timerControls">
+      <button class="btn btn-primary btn-lg" id="btnStart">Start session</button>
+    </div>
+    <div class="timer-extras" id="timerExtras" style="display:flex; justify-content:center; margin-top:8px;"></div>
+    <div class="format-row" id="formatRow">
+      <div class="format-toggle" id="formatToggle">
+        <button data-fmt="print" class="active">📖 Print</button>
+        <button data-fmt="audio">🎧 Audio</button>
+      </div>
+      <label class="speed-label" id="speedLabel" style="display:none;">
+        Speed
+        <input type="number" id="speedInput" step="0.1" min="0.5" max="3" value="1.0">
+        x
+      </label>
+    </div>
+    <div class="err-banner" id="errBanner"></div>
+  </div>
+
   <div class="card week-card" id="weekCard" style="display:none;">
     <div class="week-head">
       <div class="eyebrow"><span id="weekEyebrow">This week</span></div>
@@ -421,34 +532,9 @@
   </div>
 
   <div class="today-grid">
-    <!-- LEFT: timer + history -->
+    <!-- LEFT: stack + history (timer moved up under Currently reading) -->
     <div>
-      <div class="card card-lg timer-card">
-        <div class="eyebrow" style="text-align:center;">
-          <span id="sessionLabel">Ready when you are</span>
-          <span class="heartbeat" id="heartbeat" aria-hidden="true"></span>
-        </div>
-        <div class="timer-display" id="timerDisplay">00:00</div>
-        <div class="timer-sub" id="timerSub">Pick a book to start a session.</div>
-        <div class="timer-controls" id="timerControls">
-          <button class="btn btn-primary btn-lg" id="btnStart">Start session</button>
-        </div>
-        <div class="timer-extras" id="timerExtras" style="display:flex; justify-content:center; margin-top:8px;"></div>
-        <div class="format-row" id="formatRow">
-          <div class="format-toggle" id="formatToggle">
-            <button data-fmt="print" class="active">📖 Print</button>
-            <button data-fmt="audio">🎧 Audio</button>
-          </div>
-          <label class="speed-label" id="speedLabel" style="display:none;">
-            Speed
-            <input type="number" id="speedInput" step="0.1" min="0.5" max="3" value="1.0">
-            x
-          </label>
-        </div>
-        <div class="err-banner" id="errBanner"></div>
-      </div>
-
-      <div class="card" style="margin-top:18px;">
+      <div class="card" style="margin-top:0;">
         <div class="eyebrow">Pick a book</div>
         <h3 style="margin-top:6px;">Your reading stack</h3>
         <div class="book-picker" id="bookPicker"></div>
@@ -461,15 +547,50 @@
       </div>
 
       <div class="card history" style="margin-top:18px;">
-        <div class="row between" style="align-items:center; margin-bottom:6px;">
+        <div class="row between" style="align-items:center; margin-bottom:10px;">
           <div>
             <div class="eyebrow">History</div>
             <h3 style="margin-top:6px; margin-bottom:0;">Last 7 days</h3>
           </div>
           <span class="pill" id="totalThisWeek">0 min this week</span>
         </div>
-        <svg class="sparkline" id="sparkline" viewBox="0 0 280 90" preserveAspectRatio="none"></svg>
+        <div class="hist-chart" id="histChart"></div>
+        <div class="hist-legend">
+          <span class="hist-legend-item"><span class="sw sw-day"></span>Daily minutes</span>
+          <span class="hist-legend-item"><span class="sw sw-today"></span>Today</span>
+        </div>
+        <div class="hist-divider"></div>
+        <div class="eyebrow" style="margin:2px 0 8px;">Recent sessions</div>
         <div class="recent-rows" id="recentRows"></div>
+      </div>
+
+      <!-- Monthly review printout — Bookly-style snapshot of the current month. -->
+      <div class="card month-review" id="monthReviewCard" style="margin-top:18px;">
+        <div class="month-rev-head">
+          <div class="eyebrow">Monthly review</div>
+          <h3 id="monthRevTitle" style="margin:6px 0 0;">This month</h3>
+        </div>
+        <div class="month-rev-stats">
+          <div class="mr-tile"><div class="mr-v" id="mrFinished">0</div><div class="mr-l">Finished</div></div>
+          <div class="mr-tile"><div class="mr-v" id="mrTime">0m</div><div class="mr-l">Time read</div></div>
+          <div class="mr-tile"><div class="mr-v" id="mrSessions">0</div><div class="mr-l">Sessions</div></div>
+          <div class="mr-tile"><div class="mr-v" id="mrPages">0</div><div class="mr-l">Pages</div></div>
+        </div>
+        <div class="mr-section" id="mrFinishedSection" style="display:none;">
+          <div class="eyebrow" style="margin-bottom:8px;">Books I finished</div>
+          <div class="mr-book-list" id="mrFinishedList"></div>
+        </div>
+        <div class="mr-section" id="mrInProgressSection" style="display:none;">
+          <div class="eyebrow" style="margin-bottom:8px;">Still in progress</div>
+          <div class="mr-book-list" id="mrProgressList"></div>
+        </div>
+        <div class="mr-section" id="mrEmptySection">
+          <div class="muted" style="text-align:center; padding:18px 8px;">No reads logged yet this month. Start a session to fill this in.</div>
+        </div>
+        <div class="mr-footer">
+          <button class="btn btn-outline btn-sm" id="mrPrintBtn">🖨 Print / Save PDF</button>
+          <button class="btn btn-ghost btn-sm" id="mrShareBtn">Copy summary</button>
+        </div>
       </div>
     </div>
 
@@ -578,7 +699,7 @@
   </div>
 </div>
 
-<script src="app.js?v=37"></script>
+<script src="app.js?v=38"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -926,6 +1047,7 @@
     renderHistory();
     renderWeekRecap();
     renderUpNext();
+    renderMonthReview();
   });
 
   // ---------- up next queue ----------
@@ -1074,49 +1196,138 @@
     return secs > 0 ? secs + 's' : '< 1m';
   }
 
-  function renderHistory() {
-    const days = getLast14Days().slice(-7);  // last 7 days only
-    // use ms for sparkline precision so sub-minute sessions still show bars
-    const hist14 = Store.get(K.history, []);
-    const msByDay = {};
-    for (const e of hist14) msByDay[e.date] = (msByDay[e.date] || 0) + (e.ms || e.minutes * 60000);
-    const sparkleDays = days.map(d => ({ ...d, ms: msByDay[d.date] || 0 }));
-    const maxMs = Math.max(60000, ...sparkleDays.map(d => d.ms)); // floor at 1 min
-    const svg = document.getElementById('sparkline');
-    const N = days.length;
-    const W = 280, H = 90, gap = 4, bw = (W - gap * (N - 1)) / N;
-    const todayKey = new Date().toISOString().slice(0,10);
-    let html = '';
-    sparkleDays.forEach((d, i) => {
-      const h = Math.max(2, (d.ms / maxMs) * (H - 14));
-      const x = i * (bw + gap);
-      const y = H - h;
-      html += `<rect class="spark-bar ${d.date === todayKey ? 'today' : ''}" x="${x}" y="${y}" width="${bw}" height="${h}" rx="2"></rect>`;
-    });
-    html += `<text class="spark-axis" x="0" y="${H-1}">${days[0].date.slice(5)}</text>`;
-    html += `<text class="spark-axis" x="${W-30}" y="${H-1}">today</text>`;
-    svg.innerHTML = html;
+  const DOW_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-    const recent = Store.get(K.history, []).slice(-5).reverse();
+  function renderHistory() {
+    const days = getLast14Days().slice(-7);
+    const hist = Store.get(K.history, []);
+    const msByDay = {};
+    for (const e of hist) msByDay[e.date] = (msByDay[e.date] || 0) + (e.ms || e.minutes * 60000);
+    const sparkleDays = days.map(d => ({ ...d, ms: msByDay[d.date] || 0 }));
+    const maxMs = Math.max(60000, ...sparkleDays.map(d => d.ms));
+    const todayKey = new Date().toISOString().slice(0, 10);
+
+    const chart = document.getElementById('histChart');
+    chart.innerHTML = sparkleDays.map(d => {
+      const mins = Math.round(d.ms / 60000);
+      const isToday = d.date === todayKey;
+      const heightPct = d.ms > 0 ? Math.max(8, (d.ms / maxMs) * 100) : 0;
+      const dow = DOW_LABELS[new Date(d.date + 'T00:00:00').getDay()];
+      const barCls = d.ms > 0 ? (isToday ? 'hist-bar today' : 'hist-bar') : 'hist-bar zero';
+      const label = d.ms > 0 ? `<span class="v">${mins ? mins + 'm' : '<1m'}</span>` : '';
+      return `<div class="hist-day ${isToday ? 'today' : ''}">
+        <div class="hist-bar-wrap">
+          <div class="${barCls}" style="height:${heightPct}%;">${label}</div>
+        </div>
+        <div class="hist-day-lbl">${dow}</div>
+      </div>`;
+    }).join('');
+
+    const recent = hist.slice(-5).reverse();
     const rows = document.getElementById('recentRows');
     if (!recent.length) {
-      rows.innerHTML = `<div class="muted" style="padding:10px 0;">No sessions logged yet. Start a timer above ↑</div>`;
+      rows.innerHTML = `<div class="muted" style="padding:10px 0; text-align:center;">No sessions logged yet. Start a timer above ↑</div>`;
       return;
     }
     rows.innerHTML = recent.map(e => {
       const b = findBook(e.bookId);
-      // Show the book's current format. If the session was an audio session
-      // (regardless of the book's persisted format) include the speed.
       const fmtMeta = bookFormatMeta(getBookFormat(e.bookId));
-      const speedTag = (e.format === 'audio' && e.speed && e.speed !== 1) ? ` ${e.speed}x` : '';
+      const speedTag = (e.format === 'audio' && e.speed && e.speed !== 1) ? ` · ${e.speed}x` : '';
       return `<div class="recent-row">
-        <span class="muted">${fmtDay(e.date)}</span>
-        <span class="col-title">${fmtMeta.emoji} ${b.title}<span class="muted" style="font-size:.8em;">${speedTag}</span></span>
-        <span class="muted">${fmtDuration(e)}</span>
-        <span class="muted">${e.pages ? e.pages + 'p' : ''}</span>
-        <span>${e.mood || ''}</span>
+        <div class="rr-title">${fmtMeta.emoji} ${b.title}</div>
+        <div class="rr-mood">${e.mood || ''}</div>
+        <div class="rr-meta">
+          <span class="chip dur">${fmtDuration(e)}</span>
+          ${e.pages ? `<span class="chip">${e.pages}p</span>` : ''}
+          <span class="chip">${fmtDay(e.date)}${speedTag}</span>
+        </div>
       </div>`;
     }).join('');
+  }
+
+  // ---------- monthly review (Bookly-style printout) ----------
+  function renderMonthReview() {
+    const now = new Date();
+    const monthName = now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    const startKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const endKey = nextMonth.toISOString().slice(0, 10);
+    document.getElementById('monthRevTitle').textContent = monthName;
+
+    const hist = Store.get(K.history, []);
+    const monthSessions = hist.filter(e => e.date >= startKey && e.date < endKey);
+    const totalMs = monthSessions.reduce((a, e) => a + (e.ms || e.minutes * 60000), 0);
+    const totalMins = Math.round(totalMs / 60000);
+    const totalPages = monthSessions.reduce((a, e) => a + (e.pages || 0), 0);
+
+    // Per-book aggregation
+    const byBook = {};
+    monthSessions.forEach(e => {
+      if (!byBook[e.bookId]) byBook[e.bookId] = { mins: 0, pages: 0, sessions: 0, ms: 0 };
+      byBook[e.bookId].ms += (e.ms || e.minutes * 60000);
+      byBook[e.bookId].mins += e.minutes || 0;
+      byBook[e.bookId].pages += e.pages || 0;
+      byBook[e.bookId].sessions += 1;
+    });
+
+    // Books "finished this month" = currently on Read shelf + had a session this month
+    const shelves = getShelves();
+    const readShelf = new Set(shelves.read || []);
+    const finishedIds = Object.keys(byBook).filter(id => readShelf.has(id));
+    const progressIds = Object.keys(byBook).filter(id => !readShelf.has(id));
+
+    document.getElementById('mrFinished').textContent = finishedIds.length;
+    document.getElementById('mrTime').textContent = fmtDuration({ minutes: totalMins, ms: totalMs });
+    document.getElementById('mrSessions').textContent = monthSessions.length;
+    document.getElementById('mrPages').textContent = totalPages;
+
+    const fmtBookRow = (id) => {
+      const b = findBook(id);
+      const st = byBook[id];
+      const stMins = Math.max(1, Math.round(st.ms / 60000));
+      const fmtIcons = (typeof getBookFormats === 'function') ? getBookFormats(id).map(f => bookFormatMeta(f).emoji).join('') : '';
+      return `<div class="mr-book">
+        <div class="mr-cv" data-mr-cover="${id}"></div>
+        <div>
+          <div class="mr-title">${fmtIcons ? fmtIcons + ' ' : ''}${b.title}</div>
+          <div class="mr-sub">${b.author}</div>
+        </div>
+        <div class="mr-min">${stMins}m · ${st.sessions} session${st.sessions === 1 ? '' : 's'}</div>
+      </div>`;
+    };
+
+    const finSec = document.getElementById('mrFinishedSection');
+    const progSec = document.getElementById('mrInProgressSection');
+    const emptySec = document.getElementById('mrEmptySection');
+    if (finishedIds.length) {
+      finSec.style.display = '';
+      document.getElementById('mrFinishedList').innerHTML = finishedIds.map(fmtBookRow).join('');
+    } else { finSec.style.display = 'none'; }
+    if (progressIds.length) {
+      progSec.style.display = '';
+      document.getElementById('mrProgressList').innerHTML = progressIds.map(fmtBookRow).join('');
+    } else { progSec.style.display = 'none'; }
+    emptySec.style.display = (finishedIds.length || progressIds.length) ? 'none' : '';
+
+    // Paint covers
+    document.querySelectorAll('[data-mr-cover]').forEach(node => {
+      const b = findBook(node.dataset.mrCover);
+      if (b) OL.applyCover(node, b, 'S');
+    });
+  }
+  function wireMonthReview() {
+    document.getElementById('mrPrintBtn').addEventListener('click', () => window.print());
+    document.getElementById('mrShareBtn').addEventListener('click', () => {
+      const title = document.getElementById('monthRevTitle').textContent;
+      const fin = document.getElementById('mrFinished').textContent;
+      const time = document.getElementById('mrTime').textContent;
+      const sess = document.getElementById('mrSessions').textContent;
+      const pages = document.getElementById('mrPages').textContent;
+      const text = `📖 Chaptr — ${title}\n✓ ${fin} finished · ${time} read · ${sess} sessions · ${pages} pages`;
+      navigator.clipboard?.writeText(text);
+      const btn = document.getElementById('mrShareBtn');
+      const orig = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = orig, 1500);
+    });
   }
 
   // ---------- reading buddies (Phase 4) ----------
@@ -1336,6 +1547,7 @@
     refreshCurrentBook();
     renderHistory();
     renderWeekRecap();
+    renderMonthReview();
   });
 
   // ---------- switch book mid-session ----------
@@ -1382,6 +1594,8 @@
     renderWeekRecap();
     renderUpNext();
     renderMoodCard();
+    renderMonthReview();
+    wireMonthReview();
     wireFormatToggle();
     // Phase 4 — pair reads only show when signed in with the worker configured.
     (async () => {

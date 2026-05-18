@@ -139,6 +139,34 @@
   .dlg-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; gap: 8px; }
   .dlg-actions .right { display: flex; gap: 8px; }
   .row-actions { align-self: start; }
+
+  /* Ways I Own filter row */
+  .ways-row {
+    display: flex; align-items: center; gap: 10px; margin-top: 14px;
+    flex-wrap: nowrap; overflow: hidden;
+  }
+  .ways-row .ways-label {
+    font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600; white-space: nowrap; flex-shrink: 0;
+  }
+  .ways-chips {
+    display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin; padding-bottom: 4px; flex: 1;
+  }
+  .ways-chips::-webkit-scrollbar { height: 4px; }
+  .ways-chip {
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--r-pill);
+    background: var(--surface); color: var(--ink-2); font: inherit; font-size: .8rem;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  .ways-chip:hover { border-color: var(--primary); color: var(--primary); }
+  .ways-chip.active { background: var(--primary); border-color: var(--primary); color: #FFF; }
+  @media (max-width: 540px) {
+    .ways-row { flex-direction: column; align-items: stretch; gap: 6px; }
+  }
+
+  /* multi-format icons in row meta */
+  .fmt-icons { letter-spacing: 1px; }
 </style>
 </head>
 <body>
@@ -172,6 +200,11 @@
   </section>
 
   <div class="tabs" id="tabs"></div>
+
+  <div class="ways-row" id="waysRow">
+    <span class="ways-label">Ways I own:</span>
+    <div class="ways-chips" id="waysChips"></div>
+  </div>
 
   <div class="shelf-header" id="shelfHeader">
     <div class="name-row">
@@ -298,7 +331,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=37"></script>
+<script src="app.js?v=38"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
@@ -309,7 +342,7 @@
           getSmartShelves, getSmartShelfById, isSmartShelfId,
           getBookProgress, Coach, ShelvesBackend, syncSharedShelves, Auth, Sync,
           renderSpoilers,
-          getBookFormat, bookFormatMeta } = window.Chaptr;
+          getBookFormat, getBookFormats, hasBookFormat, bookFormatMeta, BOOK_FORMATS } = window.Chaptr;
 
   function starString(rating) {
     if (!rating) return '';
@@ -327,6 +360,8 @@
 
   // activeShelf is either a system key ('reading'|'wantToRead'|'read') or a custom shelf id ('s_...')
   let activeShelf = 'reading';
+  // activeFormat filters the shelf list by "Ways I Own" — 'all' or a format id.
+  let activeFormat = 'all';
   const SYSTEM_SHELVES = [
     { key: 'reading',    name: 'Reading',     desc: 'In progress' },
     { key: 'wantToRead', name: 'Want to read', desc: 'On the queue' },
@@ -413,13 +448,18 @@
   }
 
   function renderShelf() {
-    const ids = getActiveShelfIds();
+    const allIds = getActiveShelfIds();
+    const ids = (activeFormat === 'all')
+      ? allIds
+      : allIds.filter(id => hasBookFormat(id, activeFormat));
     const meta = getActiveShelfMeta();
     const el = document.getElementById('shelfList');
     if (!ids.length) {
-      const emptyText = meta.smart
-        ? `No matches yet — this shelf auto-fills as you read.`
-        : `Nothing on this shelf yet. <a href="library.html">Browse the Library</a> to add books.`;
+      const emptyText = (activeFormat !== 'all')
+        ? `No ${bookFormatMeta(activeFormat).label} copies on this shelf yet.`
+        : meta.smart
+          ? `No matches yet — this shelf auto-fills as you read.`
+          : `Nothing on this shelf yet. <a href="library.html">Browse the Library</a> to add books.`;
       el.innerHTML = `<div class="empty">${emptyText}</div>`;
       return;
     }
@@ -438,7 +478,7 @@
           const cls = target === activeShelf ? 'move-btn current' : 'move-btn';
           const dis = target === activeShelf ? 'disabled' : '';
           return `<button class="${cls}" data-book="${id}" data-target="${target}" ${dis}>${shelfLabels[target]}</button>`;
-        }).join('') + `<button class="move-btn" data-remove-system="${id}" title="Remove from this shelf">✕</button>`;
+        }).join('') + `<button class="move-btn" data-remove-system="${id}" title="Remove from your shelves">Remove</button>`;
       }
       const tagged = customShelvesContaining(id);
       const tagBtn = `<button class="tag-btn ${tagged.length ? 'has-tags' : ''}" data-tag="${id}">${tagged.length ? `Tags · ${tagged.length}` : '+ Tag'}</button>`;
@@ -455,11 +495,15 @@
         <span class="when">${fmtDay(rv.date.slice(0,10))}</span>
       </div>` : '';
 
+      const ownedFmts = getBookFormats(id);
+      const fmtIcons = ownedFmts.length
+        ? `<span class="fmt-icons" title="${ownedFmts.map(f => bookFormatMeta(f).label).join(' · ')}">${ownedFmts.map(f => bookFormatMeta(f).emoji).join('')}</span> `
+        : '';
       return `<div class="shelf-row">
         <div class="cover-md" data-shelf-cover="${i}"></div>
         <div>
           <div class="title">${escapeHtml(b.title)}</div>
-          <div class="meta">${bookFormatMeta(getBookFormat(id)).emoji} ${escapeHtml(b.author)} · ${b.genre} · ${b.pages}p</div>
+          <div class="meta">${fmtIcons}${escapeHtml(b.author)} · ${b.genre} · ${b.pages}p</div>
         </div>
         <div class="row-actions">${actionButtons}${tagBtn}${reviewBtn}${stallBtn}</div>
         ${reviewStrip}
@@ -489,7 +533,7 @@
       btn.addEventListener('click', () => {
         const id = btn.dataset.removeSystem;
         const b = findBook(id);
-        if (!confirm(`Remove "${b.title}" from your shelves?\n\n(This won't delete it — it just takes it off Reading / Want / Read. You can add it back from Library.)`)) return;
+        if (!confirm(`Remove "${b.title}" from your shelves?`)) return;
         moveToShelf(id, null);
         renderAll();
       });
@@ -545,7 +589,31 @@
     }
   }
 
-  function renderAll() { renderTabs(); renderHeader(); renderShelf(); }
+  function renderWaysChips() {
+    const wrap = document.getElementById('waysChips');
+    // Count how many of the CURRENT shelf books have each format — hide empties.
+    const ids = (function () {
+      if (isSystemShelf(activeShelf)) return getShelves()[activeShelf] || [];
+      if (isSmartShelfId(activeShelf)) { const sm = getSmartShelfById(activeShelf); return sm ? sm.books : []; }
+      const cs = getCustomShelf(activeShelf); return cs ? cs.books : [];
+    })();
+    const counts = Object.fromEntries(BOOK_FORMATS.map(f => [f.id, 0]));
+    ids.forEach(id => getBookFormats(id).forEach(f => { counts[f] = (counts[f] || 0) + 1; }));
+    const chips = [{ id: 'all', label: 'All', emoji: '' }]
+      .concat(BOOK_FORMATS.filter(f => counts[f.id] > 0).map(f => ({ id: f.id, label: f.short, emoji: f.emoji })));
+    wrap.innerHTML = chips.map(c =>
+      `<button class="ways-chip ${c.id === activeFormat ? 'active' : ''}" data-fmt="${c.id}">${c.emoji ? c.emoji + ' ' : ''}${c.label}${c.id !== 'all' ? ` <span style="opacity:.7;">${counts[c.id]}</span>` : ''}</button>`
+    ).join('');
+    wrap.querySelectorAll('[data-fmt]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeFormat = btn.dataset.fmt;
+        renderWaysChips();
+        renderShelf();
+      });
+    });
+  }
+
+  function renderAll() { renderTabs(); renderHeader(); renderWaysChips(); renderShelf(); }
 
   // ---------- review modal ----------
   const reviewDlg = document.getElementById('reviewDlg');

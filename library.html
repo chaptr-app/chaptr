@@ -255,8 +255,10 @@
   </div>
   <div class="chips" id="formatChips" style="margin-top:8px;">
     <button class="browse-chip" data-fmt-filter="all">All formats</button>
-    <button class="browse-chip" data-fmt-filter="physical">📦 Physical</button>
+    <button class="browse-chip" data-fmt-filter="hardback">📕 Hardback</button>
+    <button class="browse-chip" data-fmt-filter="paperback">📖 Paperback</button>
     <button class="browse-chip" data-fmt-filter="kindle">📱 Kindle</button>
+    <button class="browse-chip" data-fmt-filter="ku">∞ KU</button>
     <button class="browse-chip" data-fmt-filter="audible">🎧 Audible</button>
     <button class="browse-chip" data-fmt-filter="library">🏛 Library</button>
   </div>
@@ -279,14 +281,14 @@
   </div>
 </footer>
 
-<script src="app.js?v=37"></script>
+<script src="app.js?v=38"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
           getReviews, FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
           listCustomShelves, getAISettings, ReviewsBackend,
           Social, Auth, Stats, Coach, Affiliate, renderSpoilers,
-          BOOK_FORMATS, getBookFormat, bookFormatMeta,
+          BOOK_FORMATS, getBookFormat, getBookFormats, hasBookFormat, bookFormatMeta,
           Store, K, OL } = window.Chaptr;
 
   // Personal WPM with a fallback. Used for "length in hours for you" math.
@@ -361,7 +363,7 @@
     const recs = ALL_RECS.filter(rec => {
       const b = findBook(rec.bookId);
       if (!matchesFilter(b, activeFilter)) return false;
-      if (activeFormat !== 'all' && getBookFormat(b.id) !== activeFormat) return false;
+      if (activeFormat !== 'all' && !hasBookFormat(b.id, activeFormat)) return false;
       return true;
     });
     if (!recs.length) {

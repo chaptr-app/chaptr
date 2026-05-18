@@ -140,16 +140,6 @@
       </summary>
       <div class="card" style="margin-top:14px;">
         <div class="settings-row" style="border-top:0;">
-          <div style="flex:1; margin-right:16px;">
-            <div class="label">Cloudflare Worker URL</div>
-            <div class="desc">Advanced. Required to enable sync — paste your deployed worker URL.</div>
-            <input type="url" id="workerInput" placeholder="https://chaptr-ask.your-name.workers.dev"
-              style="margin-top:8px; width:100%; padding:8px 12px; border:1px solid var(--border);
-                     border-radius:var(--r-sm); font:inherit; background:var(--bg); color:var(--ink); font-family:monospace; font-size:.85rem;">
-            <div id="workerStatus" style="font-size:.78rem; margin-top:4px; color:var(--ink-3);"></div>
-          </div>
-        </div>
-        <div class="settings-row">
           <div>
             <div class="label">Status</div>
             <div class="desc" id="syncStatus">Checking…</div>
@@ -199,7 +189,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=37"></script>
+<script src="app.js?v=38"></script>
 <script>
   const { Sync, Auth, Affiliate, getAISettings, setAISetting,
           exportReaderProfile, wipeReaderProfile,
@@ -253,10 +243,10 @@
     const statusEl = document.getElementById('syncStatus');
     if (!s.enabled) {
       badge.textContent = 'Off';
-      statusEl.textContent = 'Set your Worker URL below to enable cloud sync.';
+      statusEl.textContent = 'Cloud sync is unavailable right now.';
     } else if (s.lastSyncResult && s.lastSyncResult.startsWith('error')) {
       badge.textContent = 'Error';
-      statusEl.textContent = 'Last attempt failed. Check the Worker is deployed with D1 bound.';
+      statusEl.textContent = 'Last sync attempt failed — we\'ll keep retrying.';
     } else {
       badge.textContent = s.signedIn ? 'On · signed in' : 'On · anonymous';
       statusEl.textContent = 'Auto-syncs after every change. Pull on app boot.';
@@ -356,14 +346,6 @@
       btn.addEventListener('click', () => { setGoalType(btn.dataset.goalType); refreshGoalType(); });
     });
     refreshGoalType();
-    const workerInput = document.getElementById('workerInput');
-    const workerStatus = document.getElementById('workerStatus');
-    workerInput.value = (Store.get('chaptr.workerUrl', '') || '').replace(/^"|"$/g, '');
-    workerInput.addEventListener('change', () => {
-      const v = workerInput.value.trim();
-      Store.set('chaptr.workerUrl', v);
-      workerStatus.textContent = v ? '✓ Saved — Ask Claude in Library will use this.' : 'Cleared — Ask Claude will use preview mode.';
-    });
     document.getElementById('wipeBtn').addEventListener('click', () => {
       if (!confirm('Wipe all local Chaptr data? Sessions, shelves, streak — all gone.')) return;
       [K.session, K.history, K.shelves, K.currentBook, K.dailyGoalMin, K.wpm].forEach(k => Store.remove(k));

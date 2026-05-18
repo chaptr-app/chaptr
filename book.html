@@ -102,8 +102,8 @@
           <button class="btn btn-outline btn-sm" id="bBtnWant">+ Want to read</button>
           <button class="btn btn-outline btn-sm" id="bBtnRead">✓ Read</button>
         </div>
-        <div class="b-format-row" style="margin-top:14px;">
-          <span class="b-format-label" style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600; margin-right:8px;">My copy</span>
+        <div class="b-format-row" style="margin-top:14px; flex-direction:column; align-items:flex-start; gap:6px;">
+          <span class="b-format-label" style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600;">Ways I own this — tap any that apply</span>
           <span class="b-format-picker" id="bFormatPicker"></span>
         </div>
         <div class="b-stats" id="bStats"></div>
@@ -143,11 +143,11 @@
   </div>
 </footer>
 
-<script src="app.js?v=37"></script>
+<script src="app.js?v=38"></script>
 <script>
   const { findBook, OL, Auth, Sync, Coach, ReviewsBackend, hashHue,
           getShelves, moveToShelf, getBookProgress, Affiliate,
-          BOOK_FORMATS, getBookFormat, setBookFormat, bookFormatMeta } = window.Chaptr;
+          BOOK_FORMATS, getBookFormats, toggleBookFormat, bookFormatMeta } = window.Chaptr;
 
   const params = new URLSearchParams(location.search);
   // Accept ?id=b1, or ?title=...&author=... for ad-hoc books from search results
@@ -233,13 +233,13 @@
 
   function renderFormatPicker(book) {
     const wrap = document.getElementById('bFormatPicker');
-    const current = getBookFormat(book.id);
+    const owned = new Set(getBookFormats(book.id));
     wrap.innerHTML = BOOK_FORMATS.map(f =>
-      `<button class="b-format-pill ${f.id === current ? 'active' : ''}" data-fmt="${f.id}">${f.emoji} ${f.short}</button>`
+      `<button class="b-format-pill ${owned.has(f.id) ? 'active' : ''}" data-fmt="${f.id}" aria-pressed="${owned.has(f.id)}">${f.emoji} ${f.short}</button>`
     ).join('');
     wrap.querySelectorAll('[data-fmt]').forEach(btn => {
       btn.addEventListener('click', () => {
-        setBookFormat(book.id, btn.dataset.fmt);
+        toggleBookFormat(book.id, btn.dataset.fmt);
         renderFormatPicker(book); // repaint active state
       });
     });
