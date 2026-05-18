@@ -140,15 +140,11 @@
   .dlg-actions .right { display: flex; gap: 8px; }
   .row-actions { align-self: start; }
 
-  /* Ways I Own filter row */
-  .ways-row {
-    display: flex; align-items: center; gap: 10px; margin-top: 14px;
-    flex-wrap: nowrap; overflow: hidden;
+  /* Ways I own — dedicated section that groups your collection by format. */
+  .ways-section {
+    margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--border);
   }
-  .ways-row .ways-label {
-    font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
-    color: var(--ink-3); font-weight: 600; white-space: nowrap; flex-shrink: 0;
-  }
+  .ways-row { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; overflow: hidden; }
   .ways-chips {
     display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch;
     scrollbar-width: thin; padding-bottom: 4px; flex: 1;
@@ -156,13 +152,17 @@
   .ways-chips::-webkit-scrollbar { height: 4px; }
   .ways-chip {
     padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--r-pill);
-    background: var(--surface); color: var(--ink-2); font: inherit; font-size: .8rem;
+    background: var(--surface); color: var(--ink-2); font: inherit; font-size: .82rem;
     cursor: pointer; white-space: nowrap; flex-shrink: 0;
   }
   .ways-chip:hover { border-color: var(--primary); color: var(--primary); }
   .ways-chip.active { background: var(--primary); border-color: var(--primary); color: #FFF; }
-  @media (max-width: 540px) {
-    .ways-row { flex-direction: column; align-items: stretch; gap: 6px; }
+  .ways-chip[data-empty="1"] { opacity: .5; }
+
+  .shelf-chip {
+    display: inline-block; padding: 4px 10px; font-size: .72rem;
+    background: var(--surface-2); color: var(--ink-3); border-radius: var(--r-pill);
+    align-self: center;
   }
 
   /* multi-format icons in row meta */
@@ -201,11 +201,6 @@
 
   <div class="tabs" id="tabs"></div>
 
-  <div class="ways-row" id="waysRow">
-    <span class="ways-label">Ways I own:</span>
-    <div class="ways-chips" id="waysChips"></div>
-  </div>
-
   <div class="shelf-header" id="shelfHeader">
     <div class="name-row">
       <h3 id="shelfName">Reading</h3>
@@ -216,6 +211,21 @@
 
   <section class="shelf-section">
     <div id="shelfList"></div>
+  </section>
+
+  <!-- Ways I own — independent section that cuts across every shelf
+       and groups your collection by physical/digital format. -->
+  <section class="shelf-section ways-section" id="waysSection">
+    <div class="shelf-header" style="margin-top:0;">
+      <div class="name-row">
+        <h3 style="margin:0;">Ways I own</h3>
+        <span class="muted" id="waysSubtitle"></span>
+      </div>
+    </div>
+    <div class="ways-row" style="margin-top:14px;">
+      <div class="ways-chips" id="waysChips"></div>
+    </div>
+    <div id="waysList" style="margin-top:14px;"></div>
   </section>
 
 </main>
@@ -331,7 +341,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=38"></script>
+<script src="app.js?v=39"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
@@ -448,18 +458,13 @@
   }
 
   function renderShelf() {
-    const allIds = getActiveShelfIds();
-    const ids = (activeFormat === 'all')
-      ? allIds
-      : allIds.filter(id => hasBookFormat(id, activeFormat));
+    const ids = getActiveShelfIds();
     const meta = getActiveShelfMeta();
     const el = document.getElementById('shelfList');
     if (!ids.length) {
-      const emptyText = (activeFormat !== 'all')
-        ? `No ${bookFormatMeta(activeFormat).label} copies on this shelf yet.`
-        : meta.smart
-          ? `No matches yet — this shelf auto-fills as you read.`
-          : `Nothing on this shelf yet. <a href="library.html">Browse the Library</a> to add books.`;
+      const emptyText = meta.smart
+        ? `No matches yet — this shelf auto-fills as you read.`
+        : `Nothing on this shelf yet. <a href="library.html">Browse the Library</a> to add books.`;
       el.innerHTML = `<div class="empty">${emptyText}</div>`;
       return;
     }
@@ -589,31 +594,90 @@
     }
   }
 
+  // Build the universe of books in the user's collection: every system shelf
+  // + every custom shelf. This is the data the "Ways I own" section cuts across.
+  function allCollectionIds() {
+    const s = getShelves();
+    const ids = new Set([...(s.reading || []), ...(s.wantToRead || []), ...(s.read || [])]);
+    listCustomShelves().forEach(c => c.books.forEach(b => ids.add(b)));
+    return [...ids];
+  }
+
   function renderWaysChips() {
     const wrap = document.getElementById('waysChips');
-    // Count how many of the CURRENT shelf books have each format — hide empties.
-    const ids = (function () {
-      if (isSystemShelf(activeShelf)) return getShelves()[activeShelf] || [];
-      if (isSmartShelfId(activeShelf)) { const sm = getSmartShelfById(activeShelf); return sm ? sm.books : []; }
-      const cs = getCustomShelf(activeShelf); return cs ? cs.books : [];
-    })();
+    const ids = allCollectionIds();
     const counts = Object.fromEntries(BOOK_FORMATS.map(f => [f.id, 0]));
     ids.forEach(id => getBookFormats(id).forEach(f => { counts[f] = (counts[f] || 0) + 1; }));
-    const chips = [{ id: 'all', label: 'All', emoji: '' }]
-      .concat(BOOK_FORMATS.filter(f => counts[f.id] > 0).map(f => ({ id: f.id, label: f.short, emoji: f.emoji })));
+    const taggedCount = ids.filter(id => getBookFormats(id).length > 0).length;
+    const chips = [{ id: 'all', label: 'All formats', emoji: '', count: taggedCount }]
+      .concat(BOOK_FORMATS.map(f => ({ id: f.id, label: f.short, emoji: f.emoji, count: counts[f.id] })));
     wrap.innerHTML = chips.map(c =>
-      `<button class="ways-chip ${c.id === activeFormat ? 'active' : ''}" data-fmt="${c.id}">${c.emoji ? c.emoji + ' ' : ''}${c.label}${c.id !== 'all' ? ` <span style="opacity:.7;">${counts[c.id]}</span>` : ''}</button>`
+      `<button class="ways-chip ${c.id === activeFormat ? 'active' : ''}" data-fmt="${c.id}" ${c.id !== 'all' && c.count === 0 ? 'data-empty="1"' : ''}>${c.emoji ? c.emoji + ' ' : ''}${c.label} <span style="opacity:.7;">${c.count}</span></button>`
     ).join('');
     wrap.querySelectorAll('[data-fmt]').forEach(btn => {
       btn.addEventListener('click', () => {
         activeFormat = btn.dataset.fmt;
         renderWaysChips();
-        renderShelf();
+        renderWaysList();
       });
     });
   }
 
-  function renderAll() { renderTabs(); renderHeader(); renderWaysChips(); renderShelf(); }
+  function renderWaysList() {
+    const ids = allCollectionIds();
+    const matching = (activeFormat === 'all')
+      ? ids.filter(id => getBookFormats(id).length > 0)
+      : ids.filter(id => hasBookFormat(id, activeFormat));
+    const wrap = document.getElementById('waysList');
+    const subtitle = document.getElementById('waysSubtitle');
+
+    if (!ids.length) {
+      subtitle.textContent = '';
+      wrap.innerHTML = `<div class="empty">Add a book to a shelf first, then tag the formats you own from the book page.</div>`;
+      return;
+    }
+
+    if (!matching.length) {
+      subtitle.textContent = activeFormat === 'all'
+        ? `0 of ${ids.length} books tagged with a format yet`
+        : `0 ${bookFormatMeta(activeFormat).label} copies`;
+      wrap.innerHTML = `<div class="empty">${
+        activeFormat === 'all'
+          ? `Tap a book on a shelf, then tag the formats you own — Hardback, Kindle, Audible, etc.`
+          : `You haven't tagged any books as ${bookFormatMeta(activeFormat).label} yet.`
+      }</div>`;
+      return;
+    }
+
+    subtitle.textContent = activeFormat === 'all'
+      ? `${matching.length} book${matching.length === 1 ? '' : 's'} tagged`
+      : `${matching.length} ${bookFormatMeta(activeFormat).label} cop${matching.length === 1 ? 'y' : 'ies'}`;
+
+    wrap.innerHTML = matching.map((id, i) => {
+      const b = findBook(id);
+      const ownedFmts = getBookFormats(id);
+      const fmtIcons = `<span class="fmt-icons" title="${ownedFmts.map(f => bookFormatMeta(f).label).join(' · ')}">${ownedFmts.map(f => bookFormatMeta(f).emoji).join('')}</span>`;
+      const onShelf = ['reading', 'wantToRead', 'read'].find(k => getShelves()[k].includes(id));
+      const shelfChip = onShelf ? `<span class="shelf-chip">${shelfLabels[onShelf]}</span>` : '';
+      return `<div class="shelf-row">
+        <div class="cover-md" data-ways-cover="${i}"></div>
+        <div>
+          <div class="title">${escapeHtml(b.title)}</div>
+          <div class="meta">${fmtIcons} ${escapeHtml(b.author)} · ${b.genre} · ${b.pages}p</div>
+        </div>
+        <div class="row-actions">${shelfChip}<a href="book.html?id=${id}" class="move-btn">Edit formats</a></div>
+      </div>`;
+    }).join('');
+    matching.forEach((id, i) => {
+      const node = wrap.querySelector(`[data-ways-cover="${i}"]`);
+      if (node) OL.applyCover(node, findBook(id), 'M');
+    });
+  }
+
+  function renderAll() {
+    renderTabs(); renderHeader(); renderShelf();
+    renderWaysChips(); renderWaysList();
+  }
 
   // ---------- review modal ----------
   const reviewDlg = document.getElementById('reviewDlg');
