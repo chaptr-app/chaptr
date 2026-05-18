@@ -253,6 +253,13 @@
     <button class="browse-chip" data-filter="scifi">🌌 Sci-fi</button>
     <button class="browse-chip" data-filter="nonfic">🗺 Non-fiction</button>
   </div>
+  <div class="chips" id="formatChips" style="margin-top:8px;">
+    <button class="browse-chip" data-fmt-filter="all">All formats</button>
+    <button class="browse-chip" data-fmt-filter="physical">📦 Physical</button>
+    <button class="browse-chip" data-fmt-filter="kindle">📱 Kindle</button>
+    <button class="browse-chip" data-fmt-filter="audible">🎧 Audible</button>
+    <button class="browse-chip" data-fmt-filter="library">🏛 Library</button>
+  </div>
 
   <section class="section-head">
     <div>
@@ -272,13 +279,14 @@
   </div>
 </footer>
 
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
           getReviews, FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
           listCustomShelves, getAISettings, ReviewsBackend,
           Social, Auth, Stats, Coach, Affiliate, renderSpoilers,
+          BOOK_FORMATS, getBookFormat, bookFormatMeta,
           Store, K, OL } = window.Chaptr;
 
   // Personal WPM with a fallback. Used for "length in hours for you" math.
@@ -329,6 +337,7 @@
     return FOR_YOU.concat(extras);
   })();
   let activeFilter = 'all';
+  let activeFormat = 'all';
 
   function matchesFilter(book, filter) {
     const hoursForMe = bookHoursForMe(book);
@@ -349,7 +358,12 @@
 
   function renderForYou() {
     const el = document.getElementById('forYouFeed');
-    const recs = ALL_RECS.filter(rec => matchesFilter(findBook(rec.bookId), activeFilter));
+    const recs = ALL_RECS.filter(rec => {
+      const b = findBook(rec.bookId);
+      if (!matchesFilter(b, activeFilter)) return false;
+      if (activeFormat !== 'all' && getBookFormat(b.id) !== activeFormat) return false;
+      return true;
+    });
     if (!recs.length) {
       el.innerHTML = `<div class="muted" style="padding:20px 6px;">No books match that filter yet. Try a different chip.</div>`;
       return;
@@ -359,11 +373,13 @@
       const href = 'book.html?id=' + encodeURIComponent(b.id);
       const buyUrls = Affiliate.urls(b);
       const buyLink = buyUrls.length ? `<a href="${buyUrls[0].href}" target="_blank" rel="noopener noreferrer" style="color:var(--accent); font-size:.78rem; text-decoration:none; margin-left:6px;">🛒 Buy</a>` : '';
+      const fmt = bookFormatMeta(getBookFormat(b.id));
+      const fmtChip = `<span title="${fmt.label}" style="margin-right:4px;">${fmt.emoji}</span>`;
       return `<div class="rec-card">
         <a href="${href}" style="line-height:0; text-decoration:none;"><div class="cover-lg" data-cover-idx="${i}"></div></a>
         <div>
           <div class="title"><a href="${href}" style="color:inherit; text-decoration:none;">${b.title}</a></div>
-          <div class="author">${b.author} · ${b.genre} · ${b.pages}p ${buyLink}</div>
+          <div class="author">${fmtChip}${b.author} · ${b.genre} · ${b.pages}p ${buyLink}</div>
           <div class="community" data-com-idx="${i}" style="font-size:.78rem; color:var(--ink-3); margin-top:4px; min-height:1.1em;"></div>
           <div class="public-snippet" data-snippet-idx="${i}" style="display:none; font-size:.8rem; color:var(--ink-2); font-style:italic; margin-top:6px; padding-top:6px; border-top:1px dashed var(--border);"></div>
         </div>
@@ -430,6 +446,16 @@
         chips.forEach(x => x.classList.toggle('active', x.dataset.filter === activeFilter));
         renderForYou();
         document.getElementById('forYouFeed').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+    // Format chips (Phase 2): independent axis from the genre/length filters.
+    const fmtChips = document.querySelectorAll('#formatChips .browse-chip');
+    fmtChips.forEach(c => {
+      if (c.dataset.fmtFilter === activeFormat) c.classList.add('active');
+      c.addEventListener('click', () => {
+        activeFormat = c.dataset.fmtFilter;
+        fmtChips.forEach(x => x.classList.toggle('active', x.dataset.fmtFilter === activeFormat));
+        renderForYou();
       });
     });
   }
@@ -723,7 +749,7 @@
         <div>
           ${whoHtml}
           <span class="verb">${it.verb}</span>
-          <span class="what">${b.title}</span>
+          <span class="what">${bookFormatMeta(getBookFormat(it.bookId)).emoji} ${b.title}</span>
           ${it.rating ? `<span class="stars">${starString(it.rating)}</span>` : ''}
           ${noteHtml}
         </div>

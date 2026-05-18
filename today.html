@@ -578,7 +578,7 @@
   </div>
 </div>
 
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -598,6 +598,7 @@
           getBookWpm, getGoalType, getDailyGoalPages, getTodayPages,
           getAISettings, askCoachMore,
           PairReads, Social, Auth, Sync, hashHue,
+          getBookFormat, bookFormatMeta,
           fmtTime, fmtDay, Store, K, OL } = window.Chaptr;
 
   function fmtDuration(mins) {
@@ -863,10 +864,21 @@
     document.querySelectorAll('#formatToggle button').forEach(btn => {
       btn.addEventListener('click', () => {
         pickedFormat = btn.dataset.fmt;
-        document.querySelectorAll('#formatToggle button').forEach(b => b.classList.toggle('active', b.dataset.fmt === pickedFormat));
-        document.getElementById('speedLabel').style.display = pickedFormat === 'audio' ? 'flex' : 'none';
+        paintFormatToggle();
       });
     });
+    // Smart default: if the current book is on Audible, pre-pick Audio mode.
+    syncFormatToCurrentBook();
+  }
+  function paintFormatToggle() {
+    document.querySelectorAll('#formatToggle button').forEach(b =>
+      b.classList.toggle('active', b.dataset.fmt === pickedFormat));
+    document.getElementById('speedLabel').style.display = pickedFormat === 'audio' ? 'flex' : 'none';
+  }
+  function syncFormatToCurrentBook() {
+    const id = getCurrentBookId();
+    pickedFormat = (getBookFormat(id) === 'audible') ? 'audio' : 'print';
+    paintFormatToggle();
   }
   function onPause()  { pauseSession();  renderTimerState(); stopTick(); tickLoop(); }
   function onResume() { resumeSession(); renderTimerState(); startTick(); }
@@ -1093,10 +1105,13 @@
     }
     rows.innerHTML = recent.map(e => {
       const b = findBook(e.bookId);
-      const fmtIcon = e.format === 'audio' ? `🎧 ${e.speed && e.speed !== 1 ? e.speed + 'x' : ''}` : '';
+      // Show the book's current format. If the session was an audio session
+      // (regardless of the book's persisted format) include the speed.
+      const fmtMeta = bookFormatMeta(getBookFormat(e.bookId));
+      const speedTag = (e.format === 'audio' && e.speed && e.speed !== 1) ? ` ${e.speed}x` : '';
       return `<div class="recent-row">
         <span class="muted">${fmtDay(e.date)}</span>
-        <span class="col-title">${b.title} <span class="muted" style="font-size:.8em;">${fmtIcon}</span></span>
+        <span class="col-title">${fmtMeta.emoji} ${b.title}<span class="muted" style="font-size:.8em;">${speedTag}</span></span>
         <span class="muted">${fmtDuration(e)}</span>
         <span class="muted">${e.pages ? e.pages + 'p' : ''}</span>
         <span>${e.mood || ''}</span>

@@ -26,6 +26,16 @@
   .b-meta .author a:hover { text-decoration: underline; }
   .b-meta .specs { margin-top: 8px; color: var(--ink-3); font-size: .9rem; }
   .b-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  .b-format-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .b-format-picker { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+  .b-format-pill {
+    padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--r-pill);
+    background: var(--surface); color: var(--ink-3); font: inherit; font-size: .82rem;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: all .12s;
+  }
+  .b-format-pill:hover { border-color: var(--primary); color: var(--primary); }
+  .b-format-pill.active { background: var(--primary); border-color: var(--primary); color: #FFF; }
 
   .b-stats { display: flex; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
   .b-stat { padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }
@@ -92,6 +102,10 @@
           <button class="btn btn-outline btn-sm" id="bBtnWant">+ Want to read</button>
           <button class="btn btn-outline btn-sm" id="bBtnRead">✓ Read</button>
         </div>
+        <div class="b-format-row" style="margin-top:14px;">
+          <span class="b-format-label" style="font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600; margin-right:8px;">My copy</span>
+          <span class="b-format-picker" id="bFormatPicker"></span>
+        </div>
         <div class="b-stats" id="bStats"></div>
       </div>
     </section>
@@ -129,10 +143,11 @@
   </div>
 </footer>
 
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 <script>
   const { findBook, OL, Auth, Sync, Coach, ReviewsBackend, hashHue,
-          getShelves, moveToShelf, getBookProgress, Affiliate } = window.Chaptr;
+          getShelves, moveToShelf, getBookProgress, Affiliate,
+          BOOK_FORMATS, getBookFormat, setBookFormat, bookFormatMeta } = window.Chaptr;
 
   const params = new URLSearchParams(location.search);
   // Accept ?id=b1, or ?title=...&author=... for ad-hoc books from search results
@@ -213,6 +228,21 @@
     loadReviews(book);
     setupRecap(book);
     renderBuy(book);
+    renderFormatPicker(book);
+  }
+
+  function renderFormatPicker(book) {
+    const wrap = document.getElementById('bFormatPicker');
+    const current = getBookFormat(book.id);
+    wrap.innerHTML = BOOK_FORMATS.map(f =>
+      `<button class="b-format-pill ${f.id === current ? 'active' : ''}" data-fmt="${f.id}">${f.emoji} ${f.short}</button>`
+    ).join('');
+    wrap.querySelectorAll('[data-fmt]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setBookFormat(book.id, btn.dataset.fmt);
+        renderFormatPicker(book); // repaint active state
+      });
+    });
   }
 
   function renderBuy(book) {

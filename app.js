@@ -1318,6 +1318,32 @@ const Stats = {
   },
 };
 
+// ---------- Book formats (V4 polish: how YOU keep this copy) ----------
+// Per-user mapping of bookId → format. Tells the app where the book lives in
+// your collection, separate from where you ARE in it (Reading/Want/Read).
+const BOOK_FORMATS = [
+  { id: 'physical', label: 'Physical', emoji: '📦', short: 'Print'  },
+  { id: 'kindle',   label: 'Kindle',   emoji: '📱', short: 'Kindle' },
+  { id: 'audible',  label: 'Audible',  emoji: '🎧', short: 'Audio'  },
+  { id: 'library',  label: 'Library',  emoji: '🏛', short: 'Loan'   },
+  { id: 'other',    label: 'Other',    emoji: '📖', short: 'Other'  },
+];
+const BOOK_FORMAT_IDS = new Set(BOOK_FORMATS.map(f => f.id));
+
+function getBookFormat(bookId) {
+  const m = Store.get('chaptr.bookFormats', {});
+  return BOOK_FORMAT_IDS.has(m[bookId]) ? m[bookId] : 'physical';
+}
+function setBookFormat(bookId, format) {
+  if (!BOOK_FORMAT_IDS.has(format)) return;
+  const m = Store.get('chaptr.bookFormats', {});
+  m[bookId] = format;
+  Store.set('chaptr.bookFormats', m);
+}
+function bookFormatMeta(format) {
+  return BOOK_FORMATS.find(f => f.id === format) || BOOK_FORMATS[0];
+}
+
 // ---------- Affiliate links (V4 monetization polish) ----------
 // Stores per-vendor affiliate IDs in localStorage; produces clickable URLs for
 // any book. Search-based URLs work without ISBNs (we don't have ISBN metadata
@@ -2048,6 +2074,7 @@ window.Chaptr = {
   FriendChallenges,
   getCustomChallenges, createCustomChallenge, deleteCustomChallenge, computeChallengeProgress,
   Affiliate, renderSpoilers,
+  BOOK_FORMATS, getBookFormat, setBookFormat, bookFormatMeta,
   FRIENDS, FRIEND_ACTIVITY, friendByName, relativeTime,
   fmtTime, fmtDay,
   attachSwipe, mountBottomNav, mountNowReadingPill,

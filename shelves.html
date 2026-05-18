@@ -298,7 +298,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, findBook, getShelves, moveToShelf,
           getReview, setReview, fmtDay, attachSwipe, OL,
@@ -308,7 +308,8 @@
           customShelvesContaining,
           getSmartShelves, getSmartShelfById, isSmartShelfId,
           getBookProgress, Coach, ShelvesBackend, syncSharedShelves, Auth, Sync,
-          renderSpoilers } = window.Chaptr;
+          renderSpoilers,
+          getBookFormat, bookFormatMeta } = window.Chaptr;
 
   function starString(rating) {
     if (!rating) return '';
@@ -458,7 +459,7 @@
         <div class="cover-md" data-shelf-cover="${i}"></div>
         <div>
           <div class="title">${escapeHtml(b.title)}</div>
-          <div class="meta">${escapeHtml(b.author)} · ${b.genre} · ${b.pages}p</div>
+          <div class="meta">${bookFormatMeta(getBookFormat(id)).emoji} ${escapeHtml(b.author)} · ${b.genre} · ${b.pages}p</div>
         </div>
         <div class="row-actions">${actionButtons}${tagBtn}${reviewBtn}${stallBtn}</div>
         ${reviewStrip}
