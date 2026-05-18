@@ -282,7 +282,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=46"></script>
+<script src="app.js?v=47"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
@@ -896,9 +896,26 @@
       } catch {}
     }
 
-    const items = realActivity.length > 0
-      ? [...myReviews, ...realActivity].sort((a, b) => a.hoursAgo - b.hoursAgo).slice(0, 12)
-      : [...myReviews, ...FRIEND_ACTIVITY].sort((a, b) => a.hoursAgo - b.hoursAgo).slice(0, 8);
+    // Only fall back to the mock FRIEND_ACTIVITY when the user already has
+    // their own reviews to anchor the feed. A brand-new user gets a clean
+    // empty state instead of a wall of fake friends reading fake books.
+    let items;
+    if (realActivity.length > 0) {
+      items = [...myReviews, ...realActivity].sort((a, b) => a.hoursAgo - b.hoursAgo).slice(0, 12);
+    } else if (myReviews.length > 0) {
+      items = [...myReviews, ...FRIEND_ACTIVITY].sort((a, b) => a.hoursAgo - b.hoursAgo).slice(0, 8);
+    } else {
+      items = [];
+    }
+
+    if (!items.length) {
+      el.innerHTML = `<div class="muted" style="padding:22px 14px; text-align:center; border:1px dashed var(--border); border-radius:var(--r-md);">
+        ${Auth.signedIn()
+          ? `Follow a few readers from <a href="profile.html">Profile</a> and their reviews land here.`
+          : `<a href="profile.html">Sign in</a> and follow friends to see what they're reading.`}
+      </div>`;
+      return;
+    }
 
     el.innerHTML = items.map((it, i) => {
       const b = findBook(it.bookId);

@@ -562,7 +562,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=46"></script>
+<script src="app.js?v=47"></script>
 <script>
   const { CATALOG, findBook, getStreak, getLast14Days, getYearActivity, activityLevel,
           getStreakWithFreezes, getStreakFreezeCount, buildReaderPersona,
@@ -626,19 +626,20 @@
     for (const e of hist) {
       if (!e.wpm) continue;
       const b = findBook(e.bookId);
+      if (!b) continue;
       const g = b.genre;
       if (!byGenre[g]) byGenre[g] = { sum: 0, n: 0 };
       byGenre[g].sum += e.wpm; byGenre[g].n += 1;
     }
-    // seed with catalog genres so the chart looks alive even pre-data
-    const seed = { 'Literary': 240, 'Thriller': 320, 'Non-fiction': 220, 'Sci-fi': 270 };
-    const merged = {};
-    for (const g of Object.keys(seed)) {
-      merged[g] = byGenre[g] ? Math.round(byGenre[g].sum / byGenre[g].n) : seed[g];
-    }
-    const max = Math.max(...Object.values(merged));
     const el = document.getElementById('genreBars');
-    el.innerHTML = Object.entries(merged).map(([g, wpm]) => `
+    const entries = Object.entries(byGenre).map(([g, v]) => [g, Math.round(v.sum / v.n)]);
+    if (!entries.length) {
+      el.innerHTML = `<div class="muted" style="padding:18px 8px; text-align:center; border:1px dashed var(--border); border-radius:var(--r-sm);">Log a few sessions and your pace per genre will land here.</div>`;
+      return;
+    }
+    entries.sort((a, b) => b[1] - a[1]);
+    const max = Math.max(...entries.map(e => e[1]));
+    el.innerHTML = entries.map(([g, wpm]) => `
       <div class="genre-bar">
         <div class="name">${g}</div>
         <div class="track"><div class="fill" style="width:${(wpm/max)*100}%"></div></div>

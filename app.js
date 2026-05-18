@@ -690,7 +690,8 @@ function isoMonday(d) {
   return x.toISOString().slice(0, 10);
 }
 function getStreakFreezeState() {
-  return Store.get(K.streakFreezes, { count: 1, lastEarnedWeek: '' });
+  // New users start with 0 freezes — they earn them by reading.
+  return Store.get(K.streakFreezes, { count: 0, lastEarnedWeek: '' });
 }
 function setStreakFreezeState(s) { Store.set(K.streakFreezes, s); }
 // Auto-earn 1 freeze each new ISO week (Mon). Caps at MAX_FREEZES.
