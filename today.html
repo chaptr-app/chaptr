@@ -749,7 +749,7 @@
   </div>
 </div>
 
-<script src="app.js?v=49"></script>
+<script src="app.js?v=50"></script>
 <script>
   // surface any error visibly — easier than asking users to open devtools on phone
   window.addEventListener('error', (e) => {
@@ -1432,7 +1432,9 @@
         </head><body>
           ${clone.outerHTML}
           <script>window.addEventListener('load', () => setTimeout(() => window.print(), 350));<\/script>
-        </body></html>`;
+        <!-- Cloudflare Web Analytics (privacy-friendly, no cookies) -->
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "YOUR_CF_BEACON_TOKEN"}'></script>
+</body></html>`;
 
       const w = window.open('', '_blank', 'width=820,height=1000');
       if (!w) { alert('Allow pop-ups for Chaptr to print the monthly review.'); return; }
@@ -1724,5 +1726,7 @@
     if (b) { b.textContent = 'Init error: ' + err.message; b.classList.add('show'); }
   }
 </script>
+<!-- Cloudflare Web Analytics (privacy-friendly, no cookies) -->
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "YOUR_CF_BEACON_TOKEN"}'></script>
 </body>
 </html>

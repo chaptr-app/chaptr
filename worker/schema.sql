@@ -138,3 +138,18 @@ CREATE TABLE IF NOT EXISTS friend_challenge_members (
   PRIMARY KEY (challenge_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_fcm_user ON friend_challenge_members(user_id, status);
+
+-- Product analytics — first-party event log. Every meaningful action gets one
+-- row here. `props` is JSON for anything beyond the name. Use this to compute
+-- DAU/MAU, signup funnels, retention cohorts via SQL.
+CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT,                       -- nullable: anonymous events tracked by device_id
+  device_id TEXT,
+  name TEXT NOT NULL,                 -- 'signup' | 'session_started' | 'book_finished' | ...
+  props TEXT,                         -- JSON blob
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_events_name_date ON events(name, created_at);
+CREATE INDEX IF NOT EXISTS idx_events_user_date ON events(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_events_device_date ON events(device_id, created_at);

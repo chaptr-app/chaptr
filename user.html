@@ -122,7 +122,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=49"></script>
+<script src="app.js?v=50"></script>
 <script>
   const { findBook, OL, Auth, Sync, Social, ShelvesBackend, renderSpoilers, hashHue } = window.Chaptr;
 
@@ -268,5 +268,7 @@
 
   bootstrap().catch(e => showError('Failed to load: ' + e.message));
 </script>
+<!-- Cloudflare Web Analytics (privacy-friendly, no cookies) -->
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "YOUR_CF_BEACON_TOKEN"}'></script>
 </body>
 </html>

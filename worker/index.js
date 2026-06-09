@@ -324,6 +324,20 @@ async function ensureSchema(env) {
       PRIMARY KEY (scope, day)
     )
   `).run();
+  // Analytics events — first-party product event log.
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      device_id TEXT,
+      name TEXT NOT NULL,
+      props TEXT,
+      created_at TEXT NOT NULL
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_events_name_date ON events(name, created_at)`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_events_user_date ON events(user_id, created_at)`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_events_device_date ON events(device_id, created_at)`).run();
 }
 
 // ---------- Claude rate limits (V4 polish) ----------
@@ -802,6 +816,94 @@ async function handleTrending(request, env) {
       avgRating: r.avg_rating != null ? Math.round(r.avg_rating * 10) / 10 : null,
       mostRecent: r.most_recent,
     })),
+  });
+}
+
+// ---------- Analytics events (first-party) ----------
+// Records product events to D1. Designed to be tolerant: accepts requests with
+// or without auth, never blocks the client on failure, caps payload size, and
+// enforces a small allowlist of event names so the table can't be spammed.
+const ALLOWED_EVENT_NAMES = new Set([
+  'page_view',
+  'app_open',
+  'signup',
+  'signin',
+  'session_started',
+  'session_finished',
+  'book_added',
+  'book_finished',
+  'review_written',
+  'shelf_created',
+  'oauth_attempt',
+]);
+
+async function handleEvent(request, env) {
+  let body;
+  try { body = await request.json(); }
+  catch { return json({ ok: false, error: 'Invalid JSON' }, 400);  }
+
+  const { name, props, deviceId } = body || {};
+  if (typeof name !== 'string' || !ALLOWED_EVENT_NAMES.has(name)) {
+    return json({ ok: false, error: 'Unknown event' }, 400);
+  }
+  const propsStr = props ? JSON.stringify(props).slice(0, 2000) : null;
+  const device = (typeof deviceId === 'string' && deviceId.length <= 64) ? deviceId : null;
+
+  // Best-effort user attribution. Don't block on missing/invalid auth.
+  let userId = null;
+  try {
+    const r = await resolveUserId(request, env);
+    if (r.verified) userId = r.userId;
+  } catch {}
+
+  try {
+    await ensureSchema(env);
+    await env.DB.prepare(
+      'INSERT INTO events (user_id, device_id, name, props, created_at) VALUES (?, ?, ?, ?, datetime("now"))'
+    ).bind(userId, device, name, propsStr).run();
+  } catch (e) {
+    // Log but don't blow up the client.
+    console.warn('[events] insert failed:', e.message);
+  }
+  return json({ ok: true });
+}
+
+// Aggregated dashboard JSON. No auth needed — only returns aggregate counts,
+// never any user-identifiable rows. Hit /stats from a browser to spot-check.
+async function handleStats(request, env) {
+  await ensureSchema(env);
+  const url = new URL(request.url);
+  const days = Math.max(1, Math.min(90, parseInt(url.searchParams.get('days'), 10) || 30));
+
+  const [dauRow, mauRow, totalRow, byName, signupsByDay] = await Promise.all([
+    env.DB.prepare(
+      `SELECT COUNT(DISTINCT COALESCE(user_id, device_id)) AS n
+       FROM events WHERE created_at > datetime('now', '-1 day')`
+    ).first(),
+    env.DB.prepare(
+      `SELECT COUNT(DISTINCT COALESCE(user_id, device_id)) AS n
+       FROM events WHERE created_at > datetime('now', '-30 days')`
+    ).first(),
+    env.DB.prepare(`SELECT COUNT(*) AS n FROM events`).first(),
+    env.DB.prepare(
+      `SELECT name, COUNT(*) AS n
+       FROM events WHERE created_at > datetime('now', '-' || ? || ' days')
+       GROUP BY name ORDER BY n DESC`
+    ).bind(days).all(),
+    env.DB.prepare(
+      `SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS n
+       FROM events WHERE name = 'signup' AND created_at > datetime('now', '-' || ? || ' days')
+       GROUP BY day ORDER BY day`
+    ).bind(days).all(),
+  ]);
+
+  return json({
+    windowDays: days,
+    totalEvents: totalRow?.n || 0,
+    dau: dauRow?.n || 0,
+    mau: mauRow?.n || 0,
+    eventsByName: (byName?.results || []),
+    signupsByDay: (signupsByDay?.results || []),
   });
 }
 
@@ -1558,6 +1660,10 @@ export default {
     if (bookTimingMatch && request.method === 'GET') return handleBookTiming(request, env, decodeURIComponent(bookTimingMatch[1]));
     if (path === '/book-finishes' && request.method === 'POST') return handleFinishUpsert(request, env);
     if (path === '/trending' && request.method === 'GET') return handleTrending(request, env);
+
+    // First-party analytics (Tier 1 — instrumented in app.js)
+    if (path === '/event' && request.method === 'POST') return handleEvent(request, env);
+    if (path === '/stats' && request.method === 'GET') return handleStats(request, env);
 
     // Profiles + follow graph (Phase 2B)
     if (path === '/me/profile' && request.method === 'GET') return handleMyProfileGet(request, env);

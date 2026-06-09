@@ -122,7 +122,13 @@ const Auth = {
       if (typeof Sync !== 'undefined' && Sync.enabled()) {
         // Try to pull existing Clerk-user data first; if none, push our local state.
         const res = await Sync.pull();
-        if (res?.ok && !res.hydrated) await Sync.pushNow();
+        if (res?.ok && !res.hydrated) {
+          // Empty server snapshot → treat as a brand-new signup.
+          try { Analytics.track('signup', {}); } catch {}
+          await Sync.pushNow();
+        } else {
+          try { Analytics.track('signin', {}); } catch {}
+        }
         // Phase 3A — make sure community timing has our existing reads too.
         try { await Stats.backfillFinishes(); } catch {}
       }
@@ -174,6 +180,7 @@ const Auth = {
   async signInWithOAuth(strategy) {
     await this.load();
     if (!this._clerk?.client) throw new Error('Auth not ready');
+    try { Analytics.track('oauth_attempt', { strategy }); } catch {}
     const here = window.location.href;
     const opts = {
       strategy,
@@ -366,6 +373,39 @@ function getDeviceId() {
   }
   return id;
 }
+
+// ---------- First-party analytics ----------
+// Fire-and-forget POST to the Worker's /event endpoint. Silent on failure so
+// analytics never breaks the user experience. Attaches the Clerk JWT when
+// signed in (server attributes the event to the user); otherwise the event is
+// attributed by deviceId.
+const Analytics = {
+  _lastByName: {},  // simple debounce so a click loop can't spam the table
+  async track(name, props) {
+    try {
+      // Rate-limit any single event to once per 800ms
+      const last = this._lastByName[name] || 0;
+      if (Date.now() - last < 800) return;
+      this._lastByName[name] = Date.now();
+
+      const headers = { 'Content-Type': 'application/json' };
+      // Attach Bearer token if signed in so the worker can credit the user.
+      try {
+        const tok = await (typeof Auth !== 'undefined' ? Auth.getToken() : null);
+        if (tok) headers['Authorization'] = 'Bearer ' + tok;
+      } catch {}
+
+      await fetch(Sync.workerUrl() + '/event', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name, props: props || {}, deviceId: getDeviceId() }),
+      });
+    } catch {}
+  },
+};
+
+// Convenience global: window.Chaptr.track(name, props)
+function track(name, props) { return Analytics.track(name, props); }
 
 const K = {
   session: 'chaptr.session',
@@ -582,6 +622,7 @@ function startSession(bookId, opts = {}) {
   const speed = format === 'audio' ? Math.max(0.5, Math.min(3, parseFloat(opts.speed) || 1)) : 1;
   const startPage = Number.isFinite(opts.startPage) && opts.startPage >= 0 ? Math.floor(opts.startPage) : null;
   Store.set(K.session, { bookId, startedAt: now, elapsedMs: 0, paused: false, lastResumeAt: now, format, speed, startPage });
+  try { Analytics.track('session_started', { bookId, format }); } catch {}
 }
 
 // Log a session manually (no timer ran). Useful when a user reads away from
@@ -1029,7 +1070,9 @@ function shelfFor(bookId) {
   return null;
 }
 function moveToShelf(bookId, shelf) {
-  const s = getShelves();
+  const before = getShelves();
+  const wasOnShelf = before.reading.includes(bookId) || before.wantToRead.includes(bookId) || before.read.includes(bookId);
+  const s = { ...before };
   for (const k of ['reading', 'wantToRead', 'read']) s[k] = s[k].filter(x => x !== bookId);
   if (shelf) s[shelf].push(bookId);
   setShelves(s);
@@ -1040,6 +1083,9 @@ function moveToShelf(bookId, shelf) {
     Store.set(K.shelfDates, dates);
     // Phase 3A — push finish data so the community sees how long you took.
     try { Stats.pushFinish(bookId); } catch {}
+    try { Analytics.track('book_finished', { bookId }); } catch {}
+  } else if (shelf && !wasOnShelf) {
+    try { Analytics.track('book_added', { bookId, shelf }); } catch {}
   }
 }
 function getShelfDates() { return Store.get(K.shelfDates, {}); }
@@ -1053,6 +1099,7 @@ function setReview(bookId, review) {
   if (isEmpty) {
     delete m[bookId];
   } else {
+    try { Analytics.track('review_written', { bookId, rating: review.rating, visibility: review.visibility || 'private' }); } catch {}
     // Preserve visibility if not specified (default: private)
     const existing = m[bookId] || {};
     m[bookId] = {
@@ -2073,6 +2120,10 @@ function bootCommon() {
   } catch {}
   mountBottomNav();
   mountNowReadingPill();
+  // First-party analytics ping — once per page load, debounced inside Analytics.
+  try {
+    Analytics.track('app_open', { path: location.pathname.split('/').pop() || 'index.html' });
+  } catch {}
   // Kick off auth + backend sync if configured. Runs in background — UI doesn't wait.
   (async () => {
     try {
@@ -2151,6 +2202,7 @@ window.Chaptr = {
   fmtTime, fmtDay,
   attachSwipe, mountBottomNav, mountNowReadingPill,
   Sync, Auth, getDeviceId,
+  Analytics, track,
   OL,
 };
 
