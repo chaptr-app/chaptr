@@ -397,6 +397,40 @@ async function enforceClaudeLimits(request, env) {
   };
 }
 
+// Lightweight per-IP daily cap for cheap endpoints (/event, /me). Uses the
+// same coach_usage table with a separate scope namespace so we don't pollute
+// the Claude counters. Default 5000/day per IP — way above legit usage but
+// stops a flood from filling up the free-tier D1 write quota.
+async function enforceCheapLimits(request, env, kind, cap = 5000) {
+  await ensureSchema(env);
+  const day = new Date().toISOString().slice(0, 10);
+  const scope = `${kind}_${rateLimitScope(request)}`;
+  const row = await env.DB.prepare(
+    'SELECT count FROM coach_usage WHERE scope = ? AND day = ?'
+  ).bind(scope, day).first();
+  if ((row?.count || 0) >= cap) {
+    return { ok: false, status: 429, error: 'Too many requests today. Try again tomorrow.' };
+  }
+  await env.DB.prepare(`
+    INSERT INTO coach_usage (scope, day, count) VALUES (?, ?, 1)
+    ON CONFLICT(scope, day) DO UPDATE SET count = count + 1
+  `).bind(scope, day).run();
+  return { ok: true };
+}
+
+function withCheapLimits(handler, kind, cap) {
+  return async (request, env) => {
+    const gate = await enforceCheapLimits(request, env, kind, cap);
+    if (!gate.ok) {
+      return new Response(JSON.stringify({ error: gate.error }), {
+        status: gate.status,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+    return handler(request, env);
+  };
+}
+
 // Wrap an existing Claude handler so it short-circuits on cap and adds rate-limit headers on success.
 function withClaudeLimits(handler) {
   return async (request, env) => {
@@ -587,13 +621,28 @@ async function handleMyProfileGet(request, env) {
   return json({ profile: publicProfile(row || { id: userId }) });
 }
 
+// Strip HTML-significant characters and control bytes from display names.
+// Defense in depth: the client also escapes on render, but normalising here
+// means a sanitized value lands in D1 once and stays clean for every reader.
+function sanitizeDisplayName(s) {
+  if (s == null) return null;
+  return String(s)
+    // drop control chars (incl. NUL, tabs, line breaks beyond regular spaces)
+    .replace(/[\x00-\x1F\x7F]/g, ' ')
+    // drop angle brackets and ampersands so no markup ever reaches the page
+    .replace(/[<>&]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60);
+}
+
 async function handleMyProfilePut(request, env) {
   const { userId, error } = await resolveUserId(request, env);
   if (!userId) return json({ error: error || 'Unauthorized' }, 401);
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const username = body?.username == null ? null : String(body.username).trim().toLowerCase();
-  const displayName = body?.displayName == null ? null : String(body.displayName).trim().slice(0, 60);
+  const displayName = sanitizeDisplayName(body?.displayName);
   const avatarHue = body?.avatarHue == null ? null : Math.max(0, Math.min(359, parseInt(body.avatarHue, 10) || 0));
   if (username !== null && !USERNAME_RE.test(username)) {
     return json({ error: 'Username must be 3-24 chars, letters/numbers/_-' }, 400);
@@ -1644,7 +1693,7 @@ export default {
     if ((path === '' || path === '/') && request.method === 'POST') {
       return withClaudeLimits(handleRecommend)(request, env);
     }
-    if (path === '/me' && request.method === 'POST') return handleMe(request, env);
+    if (path === '/me' && request.method === 'POST') return withCheapLimits(handleMe, 'me', 200)(request, env);
     if (path === '/load' && request.method === 'GET') return handleLoad(request, env);
     if (path === '/sync' && request.method === 'POST') return handleSync(request, env);
 
@@ -1662,7 +1711,7 @@ export default {
     if (path === '/trending' && request.method === 'GET') return handleTrending(request, env);
 
     // First-party analytics (Tier 1 — instrumented in app.js)
-    if (path === '/event' && request.method === 'POST') return handleEvent(request, env);
+    if (path === '/event' && request.method === 'POST') return withCheapLimits(handleEvent, 'ev', 5000)(request, env);
     if (path === '/stats' && request.method === 'GET') return handleStats(request, env);
 
     // Profiles + follow graph (Phase 2B)

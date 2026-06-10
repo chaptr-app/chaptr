@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#FAF7F2">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://clerk.accounts.dev https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://covers.openlibrary.org https://ia.openlibrary.org; connect-src 'self' https://chaptr-ask.isiah-williams.workers.dev https://*.clerk.accounts.dev https://clerk.accounts.dev https://openlibrary.org https://covers.openlibrary.org https://cloudflareinsights.com https://api.clerk.com; frame-src https://*.clerk.accounts.dev https://challenges.cloudflare.com https://appleid.apple.com https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self' https://*.clerk.accounts.dev https://appleid.apple.com https://accounts.google.com; upgrade-insecure-requests"><meta name="referrer" content="strict-origin-when-cross-origin"><meta http-equiv="X-Content-Type-Options" content="nosniff">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="apple-touch-icon" href="icon.svg">
@@ -282,7 +283,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=50"></script>
+<script src="app.js?v=51"></script>
 <script>
   const { CATALOG, COVER_GRADIENTS, hashHue, findBook, FOR_YOU, askClaude,
           getShelves, setShelves, moveToShelf, addCustomBook, getCustomBooks,
@@ -818,7 +819,7 @@
       });
     } catch (e) {
       if (token !== searchInFlight) return;
-      statusEl.innerHTML = e.message + ' <button class="btn btn-outline btn-sm" id="retryBtn">Retry</button>';
+      statusEl.innerHTML = escapeHtml(e.message) + ' <button class="btn btn-outline btn-sm" id="retryBtn">Retry</button>';
       document.getElementById('retryBtn')?.addEventListener('click', () => runSearch(query));
     }
   }
@@ -927,17 +928,23 @@
       } else f = friendByName(it.friend);
       const avatarBg = `linear-gradient(135deg, hsl(${f.hue},45%,40%), hsl(${(f.hue+40)%360},55%,55%))`;
       const noteHtml = it.note ? `<div class="note">"${renderSpoilers(it.note)}"</div>` : '';
-      const whoHtml = link
-        ? `<a class="who" href="${link}" style="color:var(--ink); text-decoration:none;">${f.name}</a>`
-        : `<span class="who">${f.name}</span>`;
+      // Escape every server-supplied string. displayName, verb, and initials all
+      // originate in untrusted user input and could carry markup otherwise.
+      const safeName = escapeHtml(f.name);
+      const safeInit = escapeHtml(f.initials);
+      const safeVerb = escapeHtml(it.verb);
+      const safeLink = link ? escapeHtml(link) : null;
+      const whoHtml = safeLink
+        ? `<a class="who" href="${safeLink}" style="color:var(--ink); text-decoration:none;">${safeName}</a>`
+        : `<span class="who">${safeName}</span>`;
       return `<div class="feed-item ${it.isYou ? 'you' : ''}">
-        ${link ? `<a href="${link}" style="line-height:0;"><div class="avatar-sm" style="background:${avatarBg};">${f.initials}</div></a>`
-               : `<div class="avatar-sm" style="background:${avatarBg};">${f.initials}</div>`}
+        ${safeLink ? `<a href="${safeLink}" style="line-height:0;"><div class="avatar-sm" style="background:${avatarBg};">${safeInit}</div></a>`
+               : `<div class="avatar-sm" style="background:${avatarBg};">${safeInit}</div>`}
         <div class="feed-cover" data-feed-cover="${i}"></div>
         <div>
           ${whoHtml}
-          <span class="verb">${it.verb}</span>
-          <span class="what">${bookFormatMeta(getBookFormat(it.bookId)).emoji} ${b.title}</span>
+          <span class="verb">${safeVerb}</span>
+          <span class="what">${bookFormatMeta(getBookFormat(it.bookId)).emoji} ${escapeHtml(b.title)}</span>
           ${it.rating ? `<span class="stars">${starString(it.rating)}</span>` : ''}
           ${noteHtml}
         </div>
